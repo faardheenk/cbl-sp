@@ -1,34 +1,221 @@
-@import '~@fluentui/react/dist/sass/References.scss';
+:global {
+  .commandBarWrapper,
+  #sp-appBar,
+  #spSiteHeader,
+  #SuiteNavWrapper,
+  #vpc_Page.SiteFooter.internal,
+  #CommentsWrapper {
+    display: none !important;
+  }
 
-.reconciliation {
-  overflow: hidden;
-  padding: 1em;
-  color: "[theme:bodyText, default: #323130]";
-  color: var(--bodyText);
-  &.teams {
-    font-family: $ms-font-family-fallbacks;
+  [data-automation-id="CanvasZone"] {
+    padding: 0 !important;
+  }
+
+  [data-automation-id="CanvasControl"] {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  [data-automation-id="CanvasZone-SectionContainer"] {
+    max-width: 100% !important;
+  }
+
+  [data-automation-id="CanvasZone-Section"] {
+    padding: 0 !important;
+  }
+
+  [data-automation-id="SimpleFooter"] {
+    display: none !important;
   }
 }
 
-.welcome {
-  text-align: center;
+// src/components/Reconciliation.module.scss
+.container {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
 }
 
-.welcomeImage {
-  width: 100%;
-  max-width: 420px;
+// Flex wrapper for any two tables side-by-side
+.reconciliationContainer {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
 }
 
-.links {
-  a {
-    text-decoration: none;
-    color: "[theme:link, default:#03787c]";
-    color: var(--link); // note: CSS Custom Properties support is limited to modern browsers only
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: 1px solid #e1e5eb;
 
-    &:hover {
-      text-decoration: underline;
-      color: "[theme:linkHovered, default: #014446]";
-      color: var(--linkHovered); // note: CSS Custom Properties support is limited to modern browsers only
+  &::before {
+    content: "";
+    display: block;
+    height: 4px;
+    background: linear-gradient(90deg, #0078d4 0%, #00a4ef 100%);
+    width: 100%;
+  }
+
+  h3 {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    background: #f8fafc;
+    color: #2d3748;
+    border-bottom: 1px solid #edf2f7;
+  }
+
+  .cardBody {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    background: #ffffff;
+    overflow: hidden;
+  }
+
+  // &:hover {
+  //   transform: translateY(-2px);
+  //   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  // }
+}
+
+// Beautiful DataTable styling
+.rdt_Table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+
+  .rdt_TableHead {
+    .rdt_TableHeadRow {
+      background-color: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+
+      .rdt_TableCol {
+        font-weight: 600;
+        color: #4a5568;
+        padding: 0.875rem 1rem;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+      }
     }
   }
+
+  .rdt_TableBody {
+    .rdt_TableRow {
+      border-bottom: 1px solid #edf2f7;
+      transition: background-color 0.2s ease;
+
+      &:hover {
+        background-color: #f8fafc !important;
+      }
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      .rdt_TableCell {
+        padding: 0.875rem 1rem;
+        color: #4a5568;
+        font-size: 0.875rem;
+      }
+    }
+
+    .rdt_TableRow:nth-child(even) {
+      background-color: #f9fafb;
+    }
+  }
+
+  // Pagination styling
+  .rdt_Pagination {
+    border-top: 1px solid #e2e8f0;
+    background-color: #f8fafc;
+    padding: 0.75rem;
+
+    button {
+      color: #4a5568;
+      border: 1px solid #cbd5e0;
+      border-radius: 0.375rem;
+      padding: 0.375rem 0.75rem;
+      margin: 0 0.25rem;
+      transition: all 0.2s ease;
+
+      &:hover:not(:disabled) {
+        background-color: #edf2f7;
+        color: #2d3748;
+      }
+
+      &:disabled {
+        opacity: 0.5;
+      }
+    }
+
+    select {
+      border: 1px solid #cbd5e0;
+      border-radius: 0.375rem;
+      padding: 0.375rem;
+      color: #4a5568;
+    }
+  }
+}
+
+// Empty state styling
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  color: #a0aec0;
+  text-align: center;
+
+  svg {
+    margin-bottom: 1rem;
+    width: 3rem;
+    height: 3rem;
+    color: #cbd5e0;
+  }
+
+  h4 {
+    margin: 0.5rem 0;
+    color: #718096;
+    font-weight: 500;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+}
+
+.cell-content {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 500px; // Adjust based on your column width
+}
+
+.partialHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn {
+  height: 2.25rem;
+  padding: 0 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
 }
