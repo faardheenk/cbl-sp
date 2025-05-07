@@ -5,7 +5,7 @@ import Datatable from "./Datatable";
 type Props = {
   partialMatches: any[];
   setPartialMatchesSetter: React.Dispatch<React.SetStateAction<any[]>>;
-  setSelectedRowData?: React.Dispatch<React.SetStateAction<any>>;
+  setSelectedRowData?: React.Dispatch<React.SetStateAction<any[]>>;
 };
 
 function PartialMatch({
@@ -13,20 +13,32 @@ function PartialMatch({
   setPartialMatchesSetter,
   setSelectedRowData,
 }: Props) {
-  const [selectedRow, setSelectedRow] = useState<number | null>(null);
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
 
   const handleRowClicked = (row: any) => {
-    console.log("Row clicked:", row.row_id_1);
-    setSelectedRow(row.row_id_1);
-    // setSelectedRowData && setSelectedRowData(row);
+    // Toggle selection
+    setSelectedRows((prev) => {
+      if (prev.includes(row.row_id_1)) {
+        return prev.filter((id) => id !== row.row_id_1);
+      } else {
+        return [...prev, row.row_id_1];
+      }
+    });
 
-    if (setSelectedRowData) setSelectedRowData(row);
-    // setPartialMatchesSetter(row);
+    if (setSelectedRowData) {
+      setSelectedRowData((prev) => {
+        if (prev.some((r) => r.row_id_1 === row.row_id_1)) {
+          return prev.filter((r) => r.row_id_1 !== row.row_id_1);
+        } else {
+          return [...prev, row];
+        }
+      });
+    }
   };
 
   const conditionalRowStyles = [
     {
-      when: (row: any) => row.row_id_1 === selectedRow,
+      when: (row: any) => selectedRows.includes(row.row_id_1),
       style: {
         backgroundColor: "rgba(68, 129, 221, 0.1)",
         userSelect: "none" as const,

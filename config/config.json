@@ -17,11 +17,20 @@
           "manifest": "./src/webparts/dashboard/DashboardWebPart.manifest.json"
         }
       ]
+    },
+    "landing-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/landing/LandingWebPart.js",
+          "manifest": "./src/webparts/landing/LandingWebPart.manifest.json"
+        }
+      ]
     }
   },
   "externals": {},
   "localizedResources": {
     "ReconciliationWebPartStrings": "lib/webparts/reconciliation/loc/{locale}.js",
-    "DashboardWebPartStrings": "lib/webparts/dashboard/loc/{locale}.js"
+    "DashboardWebPartStrings": "lib/webparts/dashboard/loc/{locale}.js",
+    "LandingWebPartStrings": "lib/webparts/landing/loc/{locale}.js"
   }
 }

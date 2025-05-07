@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
-  "id": "dbb2cc8a-c327-4810-b433-6dafcada3155",
-  "alias": "DashboardWebPart",
+  "id": "810ca0c9-55f2-4452-a6f6-5d88aa4633bf",
+  "alias": "LandingWebPart",
   "componentType": "WebPart",
 
   // The "*" signifies that the version should be taken from the package.json
@@ -12,24 +12,17 @@
   // Components that allow authors to embed arbitrary script code should set this to true.
   // https://support.office.com/en-us/article/Turn-scripting-capabilities-on-or-off-1f2c515f-5d7e-448a-9fd7-835da935584f
   "requiresCustomScript": false,
-  "supportedHosts": [
-    "SharePointWebPart",
-    "TeamsPersonalApp",
-    "TeamsTab",
-    "SharePointFullPage"
-  ],
+  "supportedHosts": ["SharePointWebPart", "TeamsPersonalApp", "TeamsTab", "SharePointFullPage"],
   "supportsThemeVariants": true,
 
-  "preconfiguredEntries": [
-    {
-      "groupId": "5c03119e-3074-46fd-976b-c60198311f70", // Advanced
-      "group": { "default": "Advanced" },
-      "title": { "default": "Dashboard" },
-      "description": { "default": "Dashboard description" },
-      "officeFabricIconFontName": "Page",
-      "properties": {
-        "description": "Dashboard"
-      }
+  "preconfiguredEntries": [{
+    "groupId": "5c03119e-3074-46fd-976b-c60198311f70", // Advanced
+    "group": { "default": "Advanced" },
+    "title": { "default": "Landing" },
+    "description": { "default": "Landing description" },
+    "officeFabricIconFontName": "Page",
+    "properties": {
+      "description": "Landing"
     }
-  ]
+  }]
 }

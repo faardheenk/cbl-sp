@@ -1,20 +1,24 @@
 import * as React from "react";
 import * as ReactDom from "react-dom";
-import { BaseClientSideWebPart } from "@microsoft/sp-webpart-base";
-import { SpContext } from "../../SpContext";
-import Reconciliation from "./components/Reconciliation";
 import { Version } from "@microsoft/sp-core-library";
-import { getSP } from "../../pnpjsConfig";
+import { BaseClientSideWebPart } from "@microsoft/sp-webpart-base";
+import Landing from "./components/Landing";
+import { SpContext } from "../../SpContext";
 import { TaskProvider } from "../../context/TaskContext";
+import { getSP } from "../../pnpjsConfig";
 
-export default class ReconciliationWebPart extends BaseClientSideWebPart<{}> {
+export interface ILandingWebPartProps {
+  description: string;
+}
+
+export default class LandingWebPart extends BaseClientSideWebPart<{}> {
   public render(): void {
     const sp = getSP(this.context);
 
     const element: React.ReactElement = (
       <SpContext.Provider value={{ context: this.context, sp }}>
         <TaskProvider context={this.context}>
-          <Reconciliation />
+          <Landing />
         </TaskProvider>
       </SpContext.Provider>
       // <Reconciliation />

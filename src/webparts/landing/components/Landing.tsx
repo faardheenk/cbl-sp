@@ -1,21 +1,12 @@
 import React, { useState } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 
-import styles from "./Dashboard.module.scss";
+import styles from "./Landing.module.scss";
 
-import {
-  Container,
-  Row,
-  Col,
-  Button,
-  Modal,
-  Form,
-  Card,
-  Table,
-  Badge,
-} from "react-bootstrap";
+import { Container, Button, Card, Table, Badge } from "react-bootstrap";
 import Header from "../../common/Header";
-import UploadModal from "../../common/UploadModal";
+import { useTasks } from "../../../context/TaskContext";
+import { useSpContext } from "../../../SpContext";
 
 const COLORS = {
   primary: "#5A6374", // muted slate gray
@@ -25,32 +16,18 @@ const COLORS = {
   tableHeaderBg: "#E5E7EB", // light gray
 };
 
-// Muted color palette
-function Dashboard() {
+const Landing = () => {
   console.log("styles >> ", styles);
 
   const [showModal, setShowModal] = useState(false);
   const [file1, setFile1] = useState<File | null>(null);
   const [file2, setFile2] = useState<File | null>(null);
   const [selectedInsurance, setSelectedInsurance] = useState("Swan");
-  const [tasks, setTasks] = useState<
-    Array<{
-      date: string;
-      insurance: string;
-      status: string;
-      url: string;
-    }>
-  >([]);
+  const { tasks, setTasks } = useTasks();
+  const { context } = useSpContext();
 
   const handleOpen = () => {
     setShowModal(true);
-  };
-
-  const handleClose = () => {
-    setShowModal(false);
-    setFile1(null);
-    setFile2(null);
-    setSelectedInsurance("Swan");
   };
 
   const handleUpload = (
@@ -68,7 +45,7 @@ function Dashboard() {
           date: dateStr,
           insurance: selectedInsurance,
           status: "In Progress",
-          url: "/sites/CityBroker2/SitePages/Reconciliation.aspx",
+          url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx`,
         },
         ...prev,
       ]);
@@ -195,6 +172,6 @@ function Dashboard() {
       </Card>
     </Container>
   );
-}
+};
 
-export default Dashboard;
+export default Landing;
