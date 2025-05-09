@@ -15,6 +15,9 @@ function PartialMatch({
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
 
+  console.log("partialMatches", partialMatches);
+  console.log("selectedRows", selectedRows);
+
   const handleRowClicked = (row: any) => {
     // Toggle selection
     setSelectedRows((prev) => {
@@ -30,7 +33,7 @@ function PartialMatch({
         if (prev.some((r) => r.row_id_1 === row.row_id_1)) {
           return prev.filter((r) => r.row_id_1 !== row.row_id_1);
         } else {
-          return [...prev, row];
+          return [...prev, { ...row, match_condition: "manual match" }];
         }
       });
     }

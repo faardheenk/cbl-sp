@@ -9,13 +9,44 @@ type Props = {
 };
 
 function Datatable({ data, handleRowClicked, conditionalRowStyles }: Props) {
+  const defaultConditionalRowStyles = [
+    {
+      when: (row: any) => row.match_condition === "match",
+      style: {
+        backgroundColor: "#e6ffe6",
+      },
+    },
+    {
+      when: (row: any) => row.match_condition === "mismatch",
+      style: {
+        backgroundColor: "#ffe6e6",
+      },
+    },
+    {
+      when: (row: any) => row.match_condition === "pre-matched",
+      style: {
+        backgroundColor: "#fff2e6",
+      },
+    },
+    {
+      when: (row: any) => row.match_condition === "manual match",
+      style: {
+        color: "#ff0000",
+      },
+    },
+  ];
+
   const columns: TableColumn<any>[] = data.length
     ? Object.keys(data[0])
-        .slice(1, -2)
+        .filter(
+          (key) =>
+            key !== "row_id_1" &&
+            key !== "row_id_2" &&
+            key !== "match_condition"
+        )
         .map((key) => ({
           name: key,
           selector: (row) => row[key],
-          sortable: true,
           cell: (row) => (
             <div className={styles["cell-content"]} title={row[key]}>
               {row[key]}
@@ -49,7 +80,6 @@ function Datatable({ data, handleRowClicked, conditionalRowStyles }: Props) {
           pagination
           pointerOnHover
           responsive
-          striped
           fixedHeader
           fixedHeaderScrollHeight="calc(100% - 56px)"
           customStyles={customStyles}
@@ -59,7 +89,9 @@ function Datatable({ data, handleRowClicked, conditionalRowStyles }: Props) {
             flexDirection: "column",
           }}
           {...(handleRowClicked && { onRowClicked: handleRowClicked })}
-          {...(conditionalRowStyles && { conditionalRowStyles })}
+          conditionalRowStyles={
+            conditionalRowStyles || defaultConditionalRowStyles
+          }
         />
       ) : (
         <div className={styles["empty-state"]}>

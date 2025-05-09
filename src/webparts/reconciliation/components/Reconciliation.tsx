@@ -56,26 +56,26 @@ function Reconciliation() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const classes = useStyles();
 
-  const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/CBL_SWAN_07_MAY_25.xlsx`;
+  const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/CBL_SWAN_08_MAY_25.xlsx`;
 
   console.log("tasks", tasks);
 
   useEffect(() => {
     const fetchData = async () => {
       const {
-        completeMatchFile1Worksheet,
-        completeMatchFile2Worksheet,
-        partialMatchFile1Worksheet,
-        partialMatchFile2Worksheet,
-        noMatchFile1Worksheet,
-        noMatchFile2Worksheet,
+        completeMatchesFile1,
+        completeMatchesFile2,
+        partialMatchesFile1,
+        partialMatchesFile2,
+        noMatchesFile1,
+        noMatchesFile2,
       } = await fetchFile(url, sp);
-      setCompleteMatchFile1Worksheet(completeMatchFile1Worksheet);
-      setCompleteMatchFile2Worksheet(completeMatchFile2Worksheet);
-      setPartialMatchesFile1(partialMatchFile1Worksheet);
-      setPartialMatchesFile2(partialMatchFile2Worksheet);
-      setNoMatchesFile1(noMatchFile1Worksheet);
-      setNoMatchesFile2(noMatchFile2Worksheet);
+      setCompleteMatchFile1Worksheet(completeMatchesFile1);
+      setCompleteMatchFile2Worksheet(completeMatchesFile2);
+      setPartialMatchesFile1(partialMatchesFile1);
+      setPartialMatchesFile2(partialMatchesFile2);
+      setNoMatchesFile1(noMatchesFile1);
+      setNoMatchesFile2(noMatchesFile2);
     };
     fetchData();
   }, []);
@@ -83,6 +83,7 @@ function Reconciliation() {
   useEffect(() => {
     console.log("selectedPartialRow1", selectedPartialRow1);
     console.log("selectedPartialRow2", selectedPartialRow2);
+    console.log("completeMatchFile1Worksheet", completeMatchFile1Worksheet);
   }, [selectedPartialRow1, selectedPartialRow2]);
 
   const addMatchKeys = async (matchingKeys: string) => {
@@ -103,30 +104,53 @@ function Reconciliation() {
 
   const handleMoveToExactMatch = async () => {
     if (selectedPartialRow1.length > 0 && selectedPartialRow2.length > 0) {
-      // Move all selected rows from partial matches to exact matches
-      const updatedPartialMatchesFile1 = partialMatchesFile1.filter(
-        (row) =>
-          !selectedPartialRow1.some(
+      // Update partial matches by clearing data but keeping the rows
+      const updatedPartialMatchesFile1 = partialMatchesFile1.map((row) => {
+        if (
+          selectedPartialRow1.some(
             (selected) => selected.row_id_1 === row.row_id_1
           )
-      );
+        ) {
+          const updatedRow = { ...row };
+          Object.keys(updatedRow).forEach((key) => {
+            updatedRow[key] = "";
+          });
+          // updatedRow.match_condition = "manual match";
+          return updatedRow;
+        }
+        return row;
+      });
 
-      console.log("updatedPartialMatchesFile1", updatedPartialMatchesFile1);
+      const updatedPartialMatchesFile2 = partialMatchesFile2.map((row) => {
+        if (
+          selectedPartialRow2.some(
+            (selected) => selected.row_id_2 === row.row_id_2
+          )
+        ) {
+          const updatedRow = { ...row };
+          Object.keys(updatedRow).forEach((key) => {
+            updatedRow[key] = "";
+          });
+          // updatedRow.match_condition = "manual match";
+          return updatedRow;
+        }
+        return row;
+      });
 
       setPartialMatchesFile1(updatedPartialMatchesFile1);
+      setPartialMatchesFile2(updatedPartialMatchesFile2);
+
+      // Add selected rows to exact matches
       setCompleteMatchFile1Worksheet([
         ...completeMatchFile1Worksheet,
         ...selectedPartialRow1,
       ]);
+      setCompleteMatchFile2Worksheet([
+        ...completeMatchFile2Worksheet,
+        ...selectedPartialRow2,
+      ]);
 
-      const updatedPartialMatchesFile2 = partialMatchesFile2.filter(
-        (row) =>
-          !selectedPartialRow2.some(
-            (selected) => selected.row_id_2 === row.row_id_2
-          )
-      );
-      setPartialMatchesFile2(updatedPartialMatchesFile2);
-
+      // Remove from no matches if present
       setNoMatchesFile1(
         noMatchesFile1.filter(
           (row) =>
