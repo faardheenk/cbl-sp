@@ -64,14 +64,25 @@
     width: 100%;
   }
 
-  h3 {
-    margin: 0;
-    padding: 1rem 1.25rem;
-    font-size: 1.125rem;
-    font-weight: 600;
+  .cardHeader {
+    display: flex;
+    justify-content: space-between;
     background: #f8fafc;
     color: #2d3748;
+    font-weight: 600;
     border-bottom: 1px solid #edf2f7;
+    padding: 1rem 1.25rem;
+
+    h3 {
+      font-size: 1.125rem;
+      margin: auto 0;
+    }
+
+    div {
+      font-size: 0.875rem;
+      color: #4a5568;
+      width: 50%;
+    }
   }
 
   .cardBody {

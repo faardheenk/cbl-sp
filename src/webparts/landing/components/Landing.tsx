@@ -45,7 +45,7 @@ const Landing = () => {
           date: dateStr,
           insurance: selectedInsurance,
           status: "In Progress",
-          url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx`,
+          url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx?Insurance=${selectedInsurance}`,
         },
         ...prev,
       ]);

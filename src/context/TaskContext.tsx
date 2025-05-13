@@ -36,7 +36,7 @@ export const TaskProvider: React.FC<TaskContextProps> = ({
       date: "Mar 2025",
       insurance: "Swan",
       status: "Manual Review",
-      url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx`,
+      url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx?Insurance=SWAN`,
       // url: `/Reconciliation.aspx`,
     },
   ]);

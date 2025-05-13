@@ -13,6 +13,7 @@ import { uploadFiles, uploadExcelFiles } from "../../../lib/uploadFiles";
 import Datatable from "./Datatable";
 import Header from "../../common/Header";
 import { useTasks } from "../../../context/TaskContext";
+import { ColumnMappingType } from "../../../typings";
 
 const useStyles = makeStyles({
   container: {
@@ -54,11 +55,36 @@ function Reconciliation() {
   const [noMatchesFile2, setNoMatchesFile2] = useState<any[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [currentManualMatchGroup, setCurrentManualMatchGroup] =
+    useState<number>(1);
+  const [partialMatchSum1, setPartialMatchSum1] = useState<number>(0);
+  const [partialMatchSum2, setPartialMatchSum2] = useState<number>(0);
+  const [noMatchSum1, setNoMatchSum1] = useState<number>(0);
+  const [noMatchSum2, setNoMatchSum2] = useState<number>(0);
   const classes = useStyles();
+  const [cblColumnMappings, setCblColumnMappings] = useState<ColumnMappingType>(
+    {
+      policyNo: "",
+      placingNo: "",
+      clientName: "",
+      amount: "",
+    }
+  );
+  const [insuranceColumnMappings, setInsuranceColumnMappings] =
+    useState<ColumnMappingType>({
+      policyNo: "",
+      placingNo: "",
+      clientName: "",
+      amount: "",
+    });
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const insuranceName = urlParams.get("Insurance");
+  // console.log("insurance name >>> ", insuranceName);
 
   const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/CBL_SWAN_08_MAY_25.xlsx`;
 
-  console.log("tasks", tasks);
+  // console.log("tasks", tasks);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -77,14 +103,34 @@ function Reconciliation() {
       setNoMatchesFile1(noMatchesFile1);
       setNoMatchesFile2(noMatchesFile2);
     };
+
+    const fetchColumnMappings = async () => {
+      const columnMappings = await sp.web.lists.getByTitle("Mappings");
+
+      const [{ ColumnMappings: cbl }]: [{ ColumnMappings: string }] =
+        await columnMappings.items.filter(`Title eq 'CBL'`)();
+
+      setCblColumnMappings(JSON.parse(cbl));
+
+      const [{ ColumnMappings: insuranceColumnMappings }]: [
+        { ColumnMappings: string }
+      ] = await columnMappings.items.filter(
+        `Title eq '${insuranceName?.toUpperCase()}'`
+      )();
+
+      setInsuranceColumnMappings(JSON.parse(insuranceColumnMappings));
+    };
+
     fetchData();
+    fetchColumnMappings();
   }, []);
 
-  useEffect(() => {
-    console.log("selectedPartialRow1", selectedPartialRow1);
-    console.log("selectedPartialRow2", selectedPartialRow2);
-    console.log("completeMatchFile1Worksheet", completeMatchFile1Worksheet);
-  }, [selectedPartialRow1, selectedPartialRow2]);
+  // useEffect(() => {
+  //   console.log("--- use effect ---");
+  //   console.log("selectedPartialRow1", selectedPartialRow1);
+  //   console.log("selectedPartialRow2", selectedPartialRow2);
+  //   console.log("completeMatchFile1Worksheet", completeMatchFile1Worksheet);
+  // }, [selectedPartialRow1, selectedPartialRow2]);
 
   const addMatchKeys = async (matchingKeys: string) => {
     const list = await sp.web.lists.getByTitle("Matrix");
@@ -140,15 +186,72 @@ function Reconciliation() {
       setPartialMatchesFile1(updatedPartialMatchesFile1);
       setPartialMatchesFile2(updatedPartialMatchesFile2);
 
-      // Add selected rows to exact matches
-      setCompleteMatchFile1Worksheet([
+      // Add selected rows to exact matches with group information
+      const selectedRowsWithGroup1 = selectedPartialRow1.map((row) => ({
+        ...row,
+        match_condition: "manual match",
+        match_group: currentManualMatchGroup,
+      }));
+
+      const selectedRowsWithGroup2 = selectedPartialRow2.map((row) => ({
+        ...row,
+        match_condition: "manual match",
+        match_group: currentManualMatchGroup,
+      }));
+
+      let newCompleteMatchFile1Worksheet = [
         ...completeMatchFile1Worksheet,
-        ...selectedPartialRow1,
-      ]);
-      setCompleteMatchFile2Worksheet([
+        ...selectedRowsWithGroup1,
+      ];
+
+      let newCompleteMatchFile2Worksheet = [
         ...completeMatchFile2Worksheet,
-        ...selectedPartialRow2,
-      ]);
+        ...selectedRowsWithGroup2,
+      ];
+
+      // Calculate the difference in length between the two worksheets
+      const lengthDiff = Math.abs(
+        newCompleteMatchFile1Worksheet.length -
+          newCompleteMatchFile2Worksheet.length
+      );
+
+      // Create a template for blank rows based on the existing data structure
+      const createBlankRow = (template: any) => {
+        return Object.keys(template || {}).reduce((acc, key) => {
+          acc[key] = "";
+          return acc;
+        }, {} as Record<string, string>);
+      };
+
+      // Add blank rows to make both worksheets equal in length
+      if (
+        newCompleteMatchFile1Worksheet.length <
+        newCompleteMatchFile2Worksheet.length
+      ) {
+        const template = newCompleteMatchFile1Worksheet[0] || {};
+        const blankRows = Array(lengthDiff)
+          .fill(null)
+          .map(() => createBlankRow(template));
+        newCompleteMatchFile1Worksheet = [
+          ...newCompleteMatchFile1Worksheet,
+          ...blankRows,
+        ];
+      } else if (
+        newCompleteMatchFile2Worksheet.length <
+        newCompleteMatchFile1Worksheet.length
+      ) {
+        const template = newCompleteMatchFile2Worksheet[0] || {};
+        const blankRows = Array(lengthDiff)
+          .fill(null)
+          .map(() => createBlankRow(template));
+        newCompleteMatchFile2Worksheet = [
+          ...newCompleteMatchFile2Worksheet,
+          ...blankRows,
+        ];
+      }
+
+      setCompleteMatchFile1Worksheet(newCompleteMatchFile1Worksheet);
+      setCompleteMatchFile2Worksheet(newCompleteMatchFile2Worksheet);
 
       // Remove from no matches if present
       setNoMatchesFile1(
@@ -168,11 +271,6 @@ function Reconciliation() {
             )
         )
       );
-
-      setCompleteMatchFile2Worksheet([
-        ...completeMatchFile2Worksheet,
-        ...selectedPartialRow2,
-      ]);
 
       // await uploadFiles(
       //   sp,
@@ -194,6 +292,9 @@ function Reconciliation() {
       //   const dateStr = `${month} ${year}`;
       //   updateTaskStatus("Swan", dateStr, "Completed");
       // }
+
+      // Increment the manual match group for the next set of matches
+      setCurrentManualMatchGroup((prev) => prev + 1);
 
       setSelectedPartialRow1([]);
       setSelectedPartialRow2([]);
@@ -230,20 +331,35 @@ function Reconciliation() {
           }}
         />
 
-        <div>
+        <div className={styles.partialHeader}>
           <h5>Exact Matches</h5>
-          <div className={styles.reconciliationContainer}>
-            <div className={styles.card}>
+          <Button
+            className={styles.btn}
+            appearance="primary"
+            disabled={
+              selectedPartialRow1.length === 0 ||
+              selectedPartialRow2.length === 0
+            }
+          >
+            Save
+          </Button>
+        </div>
+
+        <div className={styles.reconciliationContainer}>
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
               <h3>Excel File 1</h3>
-              <div className={styles.cardBody}>
-                <Datatable data={completeMatchFile1Worksheet} />
-              </div>
             </div>
-            <div className={styles.card}>
+            <div className={styles.cardBody}>
+              <Datatable data={completeMatchFile1Worksheet} />
+            </div>
+          </div>
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
               <h3>Excel File 2</h3>
-              <div className={styles.cardBody}>
-                <Datatable data={completeMatchFile2Worksheet} />
-              </div>
+            </div>
+            <div className={styles.cardBody}>
+              <Datatable data={completeMatchFile2Worksheet} />
             </div>
           </div>
         </div>
@@ -267,22 +383,46 @@ function Reconciliation() {
         {/* Partial Matches Bodies */}
         <div className={styles.reconciliationContainer}>
           <div className={styles.card}>
-            <h3>Excel File 1</h3>
+            <div className={styles.cardHeader}>
+              <h3>Excel File 1</h3>
+              <div>
+                <span>
+                  Total Sum:{" "}
+                  {(Number(partialMatchSum1) + Number(noMatchSum1)).toFixed(2)}
+                </span>
+              </div>
+            </div>
             <div className={styles.cardBody}>
               <PartialMatch
+                fileType={1}
                 partialMatches={partialMatchesFile1}
                 setPartialMatchesSetter={setPartialMatchesFile1}
                 setSelectedRowData={setSelectedPartialRow1}
+                onSumChange={setPartialMatchSum1}
+                cblColumnMappings={cblColumnMappings}
+                insuranceColumnMappings={insuranceColumnMappings}
               />
             </div>
           </div>
           <div className={styles.card}>
-            <h3>Excel File 2</h3>
+            <div className={styles.cardHeader}>
+              <h3>Excel File 2</h3>
+              <div>
+                <span>
+                  Total Sum:{" "}
+                  {(Number(partialMatchSum2) + Number(noMatchSum2)).toFixed(2)}
+                </span>
+              </div>
+            </div>
             <div className={styles.cardBody}>
               <PartialMatch
+                fileType={2}
                 partialMatches={partialMatchesFile2}
                 setPartialMatchesSetter={setPartialMatchesFile2}
                 setSelectedRowData={setSelectedPartialRow2}
+                onSumChange={setPartialMatchSum2}
+                cblColumnMappings={cblColumnMappings}
+                insuranceColumnMappings={insuranceColumnMappings}
               />
             </div>
           </div>
@@ -293,24 +433,34 @@ function Reconciliation() {
           <h5>No Matches</h5>
           <div className={styles.reconciliationContainer}>
             <div className={styles.card}>
-              <h3>Excel File 1</h3>
+              <div className={styles.cardHeader}>
+                <h3>Excel File 1</h3>
+              </div>
               <div className={styles.cardBody}>
-                {/* <Datatable data={noMatchesFile1} />
-                 */}
                 <PartialMatch
+                  fileType={1}
                   partialMatches={noMatchesFile1}
                   setPartialMatchesSetter={setNoMatchesFile1}
                   setSelectedRowData={setSelectedPartialRow1}
+                  onSumChange={setNoMatchSum1}
+                  cblColumnMappings={cblColumnMappings}
+                  insuranceColumnMappings={insuranceColumnMappings}
                 />
               </div>
             </div>
             <div className={styles.card}>
-              <h3>Excel File 2</h3>
+              <div className={styles.cardHeader}>
+                <h3>Excel File 2</h3>
+              </div>
               <div className={styles.cardBody}>
                 <PartialMatch
+                  fileType={2}
                   partialMatches={noMatchesFile2}
                   setPartialMatchesSetter={setNoMatchesFile2}
                   setSelectedRowData={setSelectedPartialRow2}
+                  onSumChange={setNoMatchSum2}
+                  cblColumnMappings={cblColumnMappings}
+                  insuranceColumnMappings={insuranceColumnMappings}
                 />
               </div>
             </div>

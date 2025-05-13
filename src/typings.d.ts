@@ -10,3 +10,10 @@ export type BrokerFile = {
   rowId1: number;
   rowId2: number;
 };
+
+export type ColumnMappingType = {
+  policyNo: string;
+  placingNo: string;
+  clientName: string;
+  amount: string;
+};
