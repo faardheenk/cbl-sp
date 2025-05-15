@@ -3,39 +3,22 @@ import { Row, Col, Button, Image } from "react-bootstrap";
 import styles from "./Header.module.scss";
 import UploadModal from "./UploadModal";
 import { useSpContext } from "../../SpContext";
+import { uploadExcelFiles } from "../../lib/uploadFiles";
 
-interface HeaderProps {
-  title: string;
-  actionButton?: {
-    label: string;
-    onClick?: () => void;
-    icon?: string;
-    showUploadModal?: boolean;
-    onUpload?: (
-      file1: File | null,
-      file2: File | null,
-      selectedInsurance: string
-    ) => void;
-    insuranceOptions?: string[];
-    file1Label?: string;
-    file2Label?: string;
-  };
-}
-const Header: React.FC<HeaderProps> = ({ title, actionButton }) => {
+const Header: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
-  const { context } = useSpContext();
+  const { context, sp } = useSpContext();
+
+  const insuranceOptions = ["Swan", "MUA", "Sicom", "Eagle Insurance"];
 
   const handleOpen = () => {
-    if (actionButton?.showUploadModal) {
-      setShowModal(true);
-    } else {
-      actionButton?.onClick?.();
-    }
+    setShowModal(true);
   };
 
   const handleClose = () => {
     setShowModal(false);
   };
+
   return (
     <>
       <Row className="align-items-center mb-4">
@@ -51,28 +34,19 @@ const Header: React.FC<HeaderProps> = ({ title, actionButton }) => {
             />
           </a>
         </Col>
-        {actionButton && (
-          <Col className="text-end">
-            <Button onClick={handleOpen} className={styles.actionButton}>
-              {actionButton.icon && (
-                <i className={`bi ${actionButton.icon} me-2`} />
-              )}
-              {actionButton.label}
-            </Button>
-          </Col>
-        )}
+        <Col className="text-end">
+          <Button onClick={handleOpen} className={styles.actionButton}>
+            <i className="bi bi-cloud-arrow-up me-2" />
+            Upload Statements
+          </Button>
+        </Col>
       </Row>
 
-      {actionButton?.showUploadModal && (
-        <UploadModal
-          show={showModal}
-          onClose={handleClose}
-          onUpload={actionButton.onUpload!}
-          insuranceOptions={actionButton.insuranceOptions || []}
-          file1Label={actionButton.file1Label}
-          file2Label={actionButton.file2Label}
-        />
-      )}
+      <UploadModal
+        show={showModal}
+        onClose={handleClose}
+        insuranceOptions={insuranceOptions}
+      />
     </>
   );
 };

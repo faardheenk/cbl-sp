@@ -23,7 +23,7 @@ function PartialMatch({
   insuranceColumnMappings,
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
-  console.log("cblColumnMappings", cblColumnMappings);
+  // console.log("cblColumnMappings", cblColumnMappings);
   // Calculate sum whenever selectedRows changes
   useEffect(() => {
     const selectedData = partialMatches.filter((row) =>

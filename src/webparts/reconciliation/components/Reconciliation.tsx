@@ -2,7 +2,18 @@ import React, { useEffect, useState } from "react";
 import { useSpContext } from "../../../SpContext";
 import "bootstrap/dist/css/bootstrap.min.css";
 import PartialMatch from "./PartialMatch";
-import { Button, makeStyles } from "@fluentui/react-components";
+import {
+  Button,
+  makeStyles,
+  Spinner,
+  Toast,
+  ToastTitle,
+  useId,
+  useToastController,
+  Toaster,
+  ToastBody,
+} from "@fluentui/react-components";
+import { SaveRegular } from "@fluentui/react-icons";
 import { fetchFile } from "../../../lib/fetchFiles";
 import { generateMatchKeys } from "../../../lib/generateMatchKeys";
 import styles from "../components/Reconciliation.module.scss";
@@ -14,6 +25,8 @@ import Datatable from "./Datatable";
 import Header from "../../common/Header";
 import { useTasks } from "../../../context/TaskContext";
 import { ColumnMappingType } from "../../../typings";
+import { saveExcel } from "../../../lib/saveExcel";
+import { cleanData } from "../../../lib/cleanData";
 
 const useStyles = makeStyles({
   container: {
@@ -62,6 +75,9 @@ function Reconciliation() {
   const [noMatchSum1, setNoMatchSum1] = useState<number>(0);
   const [noMatchSum2, setNoMatchSum2] = useState<number>(0);
   const classes = useStyles();
+  const [changes, setChanges] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+
   const [cblColumnMappings, setCblColumnMappings] = useState<ColumnMappingType>(
     {
       policyNo: "",
@@ -82,9 +98,13 @@ function Reconciliation() {
   const insuranceName = urlParams.get("Insurance");
   // console.log("insurance name >>> ", insuranceName);
 
-  const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/CBL_SWAN_08_MAY_25.xlsx`;
+  const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/CBL_SWAN_09_MAY_25.xlsx`;
+  // const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/Processed.xlsx`;
 
   // console.log("tasks", tasks);
+
+  const toasterId = useId("toaster");
+  const { dispatchToast } = useToastController(toasterId);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -120,17 +140,16 @@ function Reconciliation() {
 
       setInsuranceColumnMappings(JSON.parse(insuranceColumnMappings));
     };
-
     fetchData();
     fetchColumnMappings();
   }, []);
 
-  // useEffect(() => {
-  //   console.log("--- use effect ---");
-  //   console.log("selectedPartialRow1", selectedPartialRow1);
-  //   console.log("selectedPartialRow2", selectedPartialRow2);
-  //   console.log("completeMatchFile1Worksheet", completeMatchFile1Worksheet);
-  // }, [selectedPartialRow1, selectedPartialRow2]);
+  useEffect(() => {
+    console.log("--- use effect ---");
+
+    console.log("completeMatchFile1Worksheet", completeMatchFile1Worksheet);
+    console.log("completeMatchFile2Worksheet", completeMatchFile2Worksheet);
+  }, [completeMatchFile1Worksheet, completeMatchFile2Worksheet]);
 
   const addMatchKeys = async (matchingKeys: string) => {
     const list = await sp.web.lists.getByTitle("Matrix");
@@ -150,6 +169,7 @@ function Reconciliation() {
 
   const handleMoveToExactMatch = async () => {
     if (selectedPartialRow1.length > 0 && selectedPartialRow2.length > 0) {
+      setChanges(true);
       // Update partial matches by clearing data but keeping the rows
       const updatedPartialMatchesFile1 = partialMatchesFile1.map((row) => {
         if (
@@ -219,6 +239,8 @@ function Reconciliation() {
       const createBlankRow = (template: any) => {
         return Object.keys(template || {}).reduce((acc, key) => {
           acc[key] = "";
+          acc["match_condition"] = "manual match";
+          acc["match_group"] = currentManualMatchGroup.toString();
           return acc;
         }, {} as Record<string, string>);
       };
@@ -301,45 +323,58 @@ function Reconciliation() {
     }
   };
 
-  const handleUpload = async (file1: File, file2: File) => {
-    try {
-      // const folderPath = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library`;
-      // await uploadExcelFiles(sp, [file1, file2], folderPath, [
-      //   file1.name,
-      //   file2.name,
-      // ]);
-      alert("This functionality is not available yet");
-      setUploadSuccess(true);
-    } catch (error) {
-      console.error("Error uploading files:", error);
-      setUploadError("Failed to upload files. Please try again.");
-    }
-  };
-
   return (
     <>
+      <Toaster toasterId={toasterId} />
       <div className={styles.container}>
         {/* Exact Matches */}
-        <Header
-          title="City Broker"
-          actionButton={{
-            label: "Upload Statements",
-            icon: "bi-cloud-arrow-up",
-            showUploadModal: true,
-            onUpload: handleUpload,
-            insuranceOptions: ["Swan", "MUA", "Sicom", "Eagle Insurance"],
-          }}
-        />
+        <Header />
 
         <div className={styles.partialHeader}>
           <h5>Exact Matches</h5>
           <Button
+            icon={
+              !changes ? <SaveRegular fontSize={24} /> : <Spinner size="tiny" />
+            }
+            size="small"
             className={styles.btn}
             appearance="primary"
-            disabled={
-              selectedPartialRow1.length === 0 ||
-              selectedPartialRow2.length === 0
-            }
+            disabled={!changes}
+            onClick={async () => {
+              setChanges(false);
+              setIsSaving(true);
+              const res = await saveExcel(
+                sp,
+                cleanData(
+                  completeMatchFile1Worksheet,
+                  completeMatchFile2Worksheet
+                ),
+                cleanData(partialMatchesFile1, partialMatchesFile2),
+                noMatchesFile1,
+                noMatchesFile2,
+                `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25`
+              );
+              if (res.status === 200) {
+                dispatchToast(
+                  <Toast className="bg-success text-white rounded-3">
+                    <ToastTitle>Saved Successfully</ToastTitle>
+                  </Toast>,
+                  { position: "top", intent: "success" }
+                );
+                setIsSaving(false);
+              } else {
+                dispatchToast(
+                  <Toast className="bg-danger text-white rounded-3">
+                    <ToastTitle>Error saving changes</ToastTitle>
+                    <ToastBody className="fs-3">
+                      Cannot save changes because the excel file is open
+                    </ToastBody>
+                  </Toast>,
+                  { position: "top", intent: "error" }
+                );
+                setIsSaving(false);
+              }
+            }}
           >
             Save
           </Button>

@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState } from "react";
 interface Task {
   date: string;
   insurance: string;
-  status: "Completed" | "Manual Review" | "In Progress";
+  status: "Pending" | "In Progress" | "Manual Review" | "Completed" | "Failed";
   url: string;
 }
 
@@ -31,15 +31,7 @@ export const TaskProvider: React.FC<TaskContextProps> = ({
   context,
 }) => {
   // const { context } = useSpContext();
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      date: "Mar 2025",
-      insurance: "Swan",
-      status: "Manual Review",
-      url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx?Insurance=SWAN`,
-      // url: `/Reconciliation.aspx`,
-    },
-  ]);
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   const updateTaskStatus = (
     insurance: string,

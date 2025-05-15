@@ -10,14 +10,7 @@
         }
       ]
     },
-    "dashboard-web-part": {
-      "components": [
-        {
-          "entrypoint": "./lib/webparts/dashboard/DashboardWebPart.js",
-          "manifest": "./src/webparts/dashboard/DashboardWebPart.manifest.json"
-        }
-      ]
-    },
+
     "landing-web-part": {
       "components": [
         {
