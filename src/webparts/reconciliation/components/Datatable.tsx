@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import DataTable, { TableColumn } from "react-data-table-component";
 import styles from "./Reconciliation.module.scss";
 
@@ -6,9 +6,26 @@ type Props = {
   data: any[];
   handleRowClicked?: (row: any, event?: React.MouseEvent) => void;
   conditionalRowStyles?: any;
+  filterText: string;
 };
 
-function Datatable({ data, handleRowClicked, conditionalRowStyles }: Props) {
+function Datatable({
+  data,
+  handleRowClicked,
+  conditionalRowStyles,
+  filterText,
+}: Props) {
+  const filteredItems = useMemo(() => {
+    if (!filterText) return data;
+
+    return data.filter((item) => {
+      return Object.values(item).some((value) => {
+        if (value === null || value === undefined) return false;
+        return String(value).toLowerCase().includes(filterText.toLowerCase());
+      });
+    });
+  }, [data, filterText]);
+
   const defaultConditionalRowStyles = [
     {
       when: (row: any) => row.match_condition === "match",
@@ -113,7 +130,7 @@ function Datatable({ data, handleRowClicked, conditionalRowStyles }: Props) {
       {data.length > 0 ? (
         <DataTable
           columns={columns}
-          data={data}
+          data={filteredItems}
           pagination
           pointerOnHover
           responsive

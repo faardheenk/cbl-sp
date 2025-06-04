@@ -124,7 +124,6 @@ const Landing = () => {
       style={{
         backgroundColor: COLORS.lightBg,
         minHeight: "100vh",
-        padding: "2rem",
       }}
     >
       <Header />

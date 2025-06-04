@@ -12,8 +12,14 @@ import {
   useToastController,
   Toaster,
   ToastBody,
+  Input,
 } from "@fluentui/react-components";
-import { SaveRegular } from "@fluentui/react-icons";
+import {
+  SaveRegular,
+  MoneyRegular,
+  DocumentRegular,
+  SearchRegular,
+} from "@fluentui/react-icons";
 import { fetchFile } from "../../../lib/fetchFiles";
 import { generateMatchKeys } from "../../../lib/generateMatchKeys";
 import styles from "../components/Reconciliation.module.scss";
@@ -32,6 +38,51 @@ const useStyles = makeStyles({
   container: {
     padding: "2rem",
   },
+  summaryTable: {
+    width: "100%",
+    marginBottom: "2rem",
+    backgroundColor: "white",
+    borderRadius: "8px",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+    overflow: "hidden",
+  },
+  summaryTableHeader: {
+    backgroundColor: "#f8f9fa",
+    padding: "1rem",
+    borderBottom: "1px solid #dee2e6",
+  },
+  summaryTableBody: {
+    padding: "1rem",
+  },
+  summaryTableRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: "1rem",
+    padding: "1rem",
+    borderBottom: "1px solid #dee2e6",
+    "&:last-child": {
+      borderBottom: "none",
+    },
+  },
+  summaryTableCell: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.5rem",
+  },
+  summaryTableLabel: {
+    fontSize: "0.875rem",
+    color: "#6c757d",
+    fontWeight: "500",
+  },
+  summaryTableValue: {
+    fontSize: "1.25rem",
+    fontWeight: "600",
+    color: "#212529",
+  },
+  summaryTableSubValue: {
+    fontSize: "0.875rem",
+    color: "#6c757d",
+  },
   partialMatchTable: {
     width: "40%",
   },
@@ -49,6 +100,41 @@ const useStyles = makeStyles({
   },
   btn: {
     height: "2rem",
+  },
+  cardWrapper: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+  infoCard: {
+    backgroundColor: "#f0f0f0",
+    padding: "0.5rem 1rem",
+    borderRadius: "0.25rem",
+    marginBottom: "1rem",
+  },
+  infoCardContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+  amount: {
+    fontSize: "1.5rem",
+    fontWeight: "bold",
+  },
+  count: {
+    fontSize: "0.8rem",
+    color: "#666",
+  },
+  infoRow: {
+    display: "flex",
+    alignItems: "center",
+  },
+  icon: {
+    marginRight: "0.5rem",
+  },
+  infoText: {
+    display: "flex",
+    flexDirection: "column",
   },
 });
 
@@ -74,9 +160,19 @@ function Reconciliation() {
   const [partialMatchSum2, setPartialMatchSum2] = useState<number>(0);
   const [noMatchSum1, setNoMatchSum1] = useState<number>(0);
   const [noMatchSum2, setNoMatchSum2] = useState<number>(0);
+  const [exactMatchSum1, setExactMatchSum1] = useState<number>(0);
+  const [exactMatchSum2, setExactMatchSum2] = useState<number>(0);
   const classes = useStyles();
   const [changes, setChanges] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  // Add search states
+  const [exactMatchSearch1, setExactMatchSearch1] = useState("");
+  const [exactMatchSearch2, setExactMatchSearch2] = useState("");
+  const [partialMatchSearch1, setPartialMatchSearch1] = useState("");
+  const [partialMatchSearch2, setPartialMatchSearch2] = useState("");
+  const [noMatchSearch1, setNoMatchSearch1] = useState("");
+  const [noMatchSearch2, setNoMatchSearch2] = useState("");
 
   const [cblColumnMappings, setCblColumnMappings] = useState<ColumnMappingType>(
     {
@@ -98,8 +194,8 @@ function Reconciliation() {
   const insuranceName = urlParams.get("Insurance");
   // console.log("insurance name >>> ", insuranceName);
 
-  const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/CBL_SWAN_09_MAY_25.xlsx`;
-  // const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/Processed.xlsx`;
+  // const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/CBL_SWAN_09_MAY_25.xlsx`;
+  const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/Processed.xlsx`;
 
   // console.log("tasks", tasks);
 
@@ -151,6 +247,35 @@ function Reconciliation() {
     console.log("completeMatchFile2Worksheet", completeMatchFile2Worksheet);
   }, [completeMatchFile1Worksheet, completeMatchFile2Worksheet]);
 
+  useEffect(() => {
+    // Calculate exact match sums whenever the worksheets change
+    const calculateExactMatchSums = () => {
+      const sum1 = completeMatchFile1Worksheet.reduce((acc, row) => {
+        const amount = isNaN(row[cblColumnMappings.amount])
+          ? 0
+          : Number(row[cblColumnMappings.amount]);
+        return acc + amount;
+      }, 0);
+
+      const sum2 = completeMatchFile2Worksheet.reduce((acc, row) => {
+        const amount = isNaN(row[insuranceColumnMappings.amount])
+          ? 0
+          : Number(row[insuranceColumnMappings.amount]);
+        return acc + amount;
+      }, 0);
+
+      setExactMatchSum1(sum1);
+      setExactMatchSum2(sum2);
+    };
+
+    calculateExactMatchSums();
+  }, [
+    completeMatchFile1Worksheet,
+    completeMatchFile2Worksheet,
+    cblColumnMappings,
+    insuranceColumnMappings,
+  ]);
+
   const addMatchKeys = async (matchingKeys: string) => {
     const list = await sp.web.lists.getByTitle("Matrix");
 
@@ -181,7 +306,6 @@ function Reconciliation() {
           Object.keys(updatedRow).forEach((key) => {
             updatedRow[key] = "";
           });
-          // updatedRow.match_condition = "manual match";
           return updatedRow;
         }
         return row;
@@ -197,7 +321,6 @@ function Reconciliation() {
           Object.keys(updatedRow).forEach((key) => {
             updatedRow[key] = "";
           });
-          // updatedRow.match_condition = "manual match";
           return updatedRow;
         }
         return row;
@@ -206,17 +329,33 @@ function Reconciliation() {
       setPartialMatchesFile1(updatedPartialMatchesFile1);
       setPartialMatchesFile2(updatedPartialMatchesFile2);
 
-      // Add selected rows to exact matches with group information
+      // Get the last row's match_group from both worksheets
+      const lastMatchGroup1 =
+        completeMatchFile1Worksheet.length > 0
+          ? completeMatchFile1Worksheet[completeMatchFile1Worksheet.length - 1]
+              .match_group
+          : 0;
+      const lastMatchGroup2 =
+        completeMatchFile2Worksheet.length > 0
+          ? completeMatchFile2Worksheet[completeMatchFile2Worksheet.length - 1]
+              .match_group
+          : 0;
+
+      // Use the higher match_group value to ensure alternation
+      const lastMatchGroup = Math.max(lastMatchGroup1, lastMatchGroup2);
+      const nextMatchGroup = lastMatchGroup % 2 === 0 ? 1 : 2;
+
+      // Add selected rows to exact matches with alternating group information
       const selectedRowsWithGroup1 = selectedPartialRow1.map((row) => ({
         ...row,
         match_condition: "manual match",
-        match_group: currentManualMatchGroup,
+        match_group: nextMatchGroup,
       }));
 
       const selectedRowsWithGroup2 = selectedPartialRow2.map((row) => ({
         ...row,
         match_condition: "manual match",
-        match_group: currentManualMatchGroup,
+        match_group: nextMatchGroup,
       }));
 
       let newCompleteMatchFile1Worksheet = [
@@ -240,7 +379,7 @@ function Reconciliation() {
         return Object.keys(template || {}).reduce((acc, key) => {
           acc[key] = "";
           acc["match_condition"] = "manual match";
-          acc["match_group"] = currentManualMatchGroup.toString();
+          acc["match_group"] = nextMatchGroup.toString();
           return acc;
         }, {} as Record<string, string>);
       };
@@ -294,52 +433,228 @@ function Reconciliation() {
         )
       );
 
-      // await uploadFiles(
-      //   sp,
-      //   partialMatchesFile1,
-      //   partialMatchesFile2,
-      //   `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25`
-      // );
-
-      // await addMatchKeys(matchKey);
-
-      // // Update task status to Completed when all partial matches are resolved
-      // if (
-      //   updatedPartialMatchesFile1.length === 0 &&
-      //   updatedPartialMatchesFile2.length === 0
-      // ) {
-      //   const now = new Date();
-      //   const month = now.toLocaleString("default", { month: "short" });
-      //   const year = now.getFullYear();
-      //   const dateStr = `${month} ${year}`;
-      //   updateTaskStatus("Swan", dateStr, "Completed");
-      // }
-
-      // Increment the manual match group for the next set of matches
-      setCurrentManualMatchGroup((prev) => prev + 1);
-
       setSelectedPartialRow1([]);
       setSelectedPartialRow2([]);
     }
   };
 
+  const countNonBlankRows = (rows: any[]) => {
+    return rows.filter((row) => {
+      // Get all keys except match_condition and match_group
+      const relevantKeys = Object.keys(row).filter(
+        (key) => key !== "match_condition" && key !== "match_group"
+      );
+
+      // Check if any of the relevant fields have non-empty values
+      return relevantKeys.some((key) => {
+        const value = row[key];
+        return value !== undefined && value !== null && value !== "";
+      });
+    }).length;
+  };
+
+  const formatAmount = (amount: number): string => {
+    return new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  console.log(
+    "work book sheet 1 number of lines",
+    countNonBlankRows(completeMatchFile1Worksheet)
+  );
+  console.log(
+    "work book sheet 2 number of lines",
+    countNonBlankRows(completeMatchFile2Worksheet)
+  );
+
   return (
     <>
       <Toaster toasterId={toasterId} />
-      <div className={styles.container}>
-        {/* Exact Matches */}
-        <Header />
 
+      <Header />
+      <div className={styles.container}>
+        {/* Summary Table */}
+        <div className={styles.summaryTable}>
+          <div className={styles.summaryTableHeader}>
+            <h4>Reconciliation Summary</h4>
+          </div>
+          <div className={styles.summaryTableBody}>
+            <div className={styles.summaryTableRow}>
+              <div className={styles.summaryTableSection}>
+                <div className={styles.summaryTableSectionHeader}>
+                  <h5>CBL</h5>
+                </div>
+                <div className={styles.summaryTableGrid}>
+                  <div
+                    className={styles.summaryTableCell}
+                    data-match-type="exact"
+                  >
+                    <span className={styles.summaryTableLabel}>
+                      <MoneyRegular />
+                      Exact Matches
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span className={styles.summaryTableValue}>
+                        Rs {formatAmount(exactMatchSum1)}
+                      </span>
+                      <span className={styles.summaryTableSubValue}>
+                        <DocumentRegular />
+                        {countNonBlankRows(completeMatchFile1Worksheet)} lines
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className={styles.summaryTableCell}
+                    data-match-type="partial"
+                  >
+                    <span className={styles.summaryTableLabel}>
+                      <MoneyRegular />
+                      Partial Matches
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span className={styles.summaryTableValue}>
+                        Rs {formatAmount(partialMatchSum1)}
+                      </span>
+                      <span className={styles.summaryTableSubValue}>
+                        <DocumentRegular />
+                        {countNonBlankRows(partialMatchesFile1)} lines
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className={styles.summaryTableCell}
+                    data-match-type="no-match"
+                  >
+                    <span className={styles.summaryTableLabel}>
+                      <MoneyRegular />
+                      No Matches
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span className={styles.summaryTableValue}>
+                        Rs {formatAmount(noMatchSum1)}
+                      </span>
+                      <span className={styles.summaryTableSubValue}>
+                        <DocumentRegular />
+                        {countNonBlankRows(noMatchesFile1)} lines
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className={styles.summaryTableSection}>
+                <div className={styles.summaryTableSectionHeader}>
+                  <h5>{insuranceName}</h5>
+                </div>
+                <div className={styles.summaryTableGrid}>
+                  <div
+                    className={styles.summaryTableCell}
+                    data-match-type="exact"
+                  >
+                    <span className={styles.summaryTableLabel}>
+                      <MoneyRegular />
+                      Exact Matches
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span className={styles.summaryTableValue}>
+                        Rs {formatAmount(exactMatchSum2)}
+                      </span>
+                      <span className={styles.summaryTableSubValue}>
+                        <DocumentRegular />
+                        {countNonBlankRows(completeMatchFile2Worksheet)} lines
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className={styles.summaryTableCell}
+                    data-match-type="partial"
+                  >
+                    <span className={styles.summaryTableLabel}>
+                      <MoneyRegular />
+                      Partial Matches
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span className={styles.summaryTableValue}>
+                        Rs {formatAmount(partialMatchSum2)}
+                      </span>
+                      <span className={styles.summaryTableSubValue}>
+                        <DocumentRegular />
+                        {countNonBlankRows(partialMatchesFile2)} lines
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className={styles.summaryTableCell}
+                    data-match-type="no-match"
+                  >
+                    <span className={styles.summaryTableLabel}>
+                      <MoneyRegular />
+                      No Matches
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span className={styles.summaryTableValue}>
+                        Rs {formatAmount(noMatchSum2)}
+                      </span>
+                      <span className={styles.summaryTableSubValue}>
+                        <DocumentRegular />
+                        {countNonBlankRows(noMatchesFile2)} lines
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Exact Matches */}
         <div className={styles.partialHeader}>
           <h5>Exact Matches</h5>
           <Button
             icon={
-              !changes ? <SaveRegular fontSize={24} /> : <Spinner size="tiny" />
+              isSaving ? <Spinner size="tiny" /> : <SaveRegular fontSize={24} />
             }
             size="small"
             className={styles.btn}
             appearance="primary"
-            disabled={!changes}
+            disabled={!changes || isSaving}
             onClick={async () => {
               setChanges(false);
               setIsSaving(true);
@@ -381,20 +696,90 @@ function Reconciliation() {
         </div>
 
         <div className={styles.reconciliationContainer}>
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h3>Excel File 1</h3>
+          <div className={styles.cardWrapper}>
+            <div className={styles.infoCard}>
+              <div className={styles.infoCardContent}>
+                <div className={styles.infoRow}>
+                  <MoneyRegular className={styles.icon} />
+                  <div className={styles.infoText}>
+                    <h4>Total Amount</h4>
+                    <span className={styles.amount}>
+                      {exactMatchSum1.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <div className={styles.infoRow}>
+                  <DocumentRegular className={styles.icon} />
+                  <div className={styles.infoText}>
+                    <h4>Items</h4>
+                    <span className={styles.count}>
+                      {countNonBlankRows(completeMatchFile1Worksheet)}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className={styles.cardBody}>
-              <Datatable data={completeMatchFile1Worksheet} />
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h3>CBL</h3>
+                <Input
+                  type="text"
+                  placeholder="Search..."
+                  value={exactMatchSearch1}
+                  onChange={(e) => setExactMatchSearch1(e.target.value)}
+                  contentBefore={<SearchRegular />}
+                  style={{ width: "200px" }}
+                />
+              </div>
+              <div className={styles.cardBody}>
+                <Datatable
+                  data={completeMatchFile1Worksheet}
+                  filterText={exactMatchSearch1}
+                />
+              </div>
             </div>
           </div>
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h3>Excel File 2</h3>
+          <div className={styles.cardWrapper}>
+            <div className={styles.infoCard}>
+              <div className={styles.infoCardContent}>
+                <div className={styles.infoRow}>
+                  <MoneyRegular className={styles.icon} />
+                  <div className={styles.infoText}>
+                    <h4>Total Amount</h4>
+                    <span className={styles.amount}>
+                      {exactMatchSum2.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <div className={styles.infoRow}>
+                  <DocumentRegular className={styles.icon} />
+                  <div className={styles.infoText}>
+                    <h4>Items</h4>
+                    <span className={styles.count}>
+                      {countNonBlankRows(completeMatchFile2Worksheet)}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className={styles.cardBody}>
-              <Datatable data={completeMatchFile2Worksheet} />
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h3>{insuranceName}</h3>
+                <Input
+                  type="text"
+                  placeholder="Search..."
+                  value={exactMatchSearch2}
+                  onChange={(e) => setExactMatchSearch2(e.target.value)}
+                  contentBefore={<SearchRegular />}
+                  style={{ width: "200px" }}
+                />
+              </div>
+              <div className={styles.cardBody}>
+                <Datatable
+                  data={completeMatchFile2Worksheet}
+                  filterText={exactMatchSearch2}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -417,48 +802,106 @@ function Reconciliation() {
 
         {/* Partial Matches Bodies */}
         <div className={styles.reconciliationContainer}>
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h3>Excel File 1</h3>
-              <div>
-                <span>
-                  Total Sum:{" "}
-                  {(Number(partialMatchSum1) + Number(noMatchSum1)).toFixed(2)}
-                </span>
+          <div className={styles.cardWrapper}>
+            <div className={styles.infoCard}>
+              <div className={styles.infoCardContent}>
+                <div className={styles.infoRow}>
+                  <MoneyRegular className={styles.icon} />
+                  <div className={styles.infoText}>
+                    <h4>Total Amount</h4>
+                    <span className={styles.amount}>
+                      {(Number(partialMatchSum1) + Number(noMatchSum1)).toFixed(
+                        2
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div className={styles.infoRow}>
+                  <DocumentRegular className={styles.icon} />
+                  <div className={styles.infoText}>
+                    <h4>Items</h4>
+                    <span className={styles.count}>
+                      {countNonBlankRows(partialMatchesFile1)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className={styles.cardBody}>
-              <PartialMatch
-                fileType={1}
-                partialMatches={partialMatchesFile1}
-                setPartialMatchesSetter={setPartialMatchesFile1}
-                setSelectedRowData={setSelectedPartialRow1}
-                onSumChange={setPartialMatchSum1}
-                cblColumnMappings={cblColumnMappings}
-                insuranceColumnMappings={insuranceColumnMappings}
-              />
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h3>CBL</h3>
+                <Input
+                  type="text"
+                  placeholder="Search..."
+                  value={partialMatchSearch1}
+                  onChange={(e) => setPartialMatchSearch1(e.target.value)}
+                  contentBefore={<SearchRegular />}
+                  style={{ width: "200px" }}
+                />
+              </div>
+              <div className={styles.cardBody}>
+                <PartialMatch
+                  fileType={1}
+                  partialMatches={partialMatchesFile1}
+                  setPartialMatchesSetter={setPartialMatchesFile1}
+                  setSelectedRowData={setSelectedPartialRow1}
+                  onSumChange={setPartialMatchSum1}
+                  cblColumnMappings={cblColumnMappings}
+                  insuranceColumnMappings={insuranceColumnMappings}
+                  filterText={partialMatchSearch1}
+                />
+              </div>
             </div>
           </div>
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h3>Excel File 2</h3>
-              <div>
-                <span>
-                  Total Sum:{" "}
-                  {(Number(partialMatchSum2) + Number(noMatchSum2)).toFixed(2)}
-                </span>
+          <div className={styles.cardWrapper}>
+            <div className={styles.infoCard}>
+              <div className={styles.infoCardContent}>
+                <div className={styles.infoRow}>
+                  <MoneyRegular className={styles.icon} />
+                  <div className={styles.infoText}>
+                    <h4>Total Amount</h4>
+                    <span className={styles.amount}>
+                      {(Number(partialMatchSum2) + Number(noMatchSum2)).toFixed(
+                        2
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div className={styles.infoRow}>
+                  <DocumentRegular className={styles.icon} />
+                  <div className={styles.infoText}>
+                    <h4>Items</h4>
+                    <span className={styles.count}>
+                      {countNonBlankRows(partialMatchesFile2)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className={styles.cardBody}>
-              <PartialMatch
-                fileType={2}
-                partialMatches={partialMatchesFile2}
-                setPartialMatchesSetter={setPartialMatchesFile2}
-                setSelectedRowData={setSelectedPartialRow2}
-                onSumChange={setPartialMatchSum2}
-                cblColumnMappings={cblColumnMappings}
-                insuranceColumnMappings={insuranceColumnMappings}
-              />
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h3>{insuranceName}</h3>
+                <Input
+                  type="text"
+                  placeholder="Search..."
+                  value={partialMatchSearch2}
+                  onChange={(e) => setPartialMatchSearch2(e.target.value)}
+                  contentBefore={<SearchRegular />}
+                  style={{ width: "200px" }}
+                />
+              </div>
+              <div className={styles.cardBody}>
+                <PartialMatch
+                  fileType={2}
+                  partialMatches={partialMatchesFile2}
+                  setPartialMatchesSetter={setPartialMatchesFile2}
+                  setSelectedRowData={setSelectedPartialRow2}
+                  onSumChange={setPartialMatchSum2}
+                  cblColumnMappings={cblColumnMappings}
+                  insuranceColumnMappings={insuranceColumnMappings}
+                  filterText={partialMatchSearch2}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -467,36 +910,102 @@ function Reconciliation() {
         <div>
           <h5>No Matches</h5>
           <div className={styles.reconciliationContainer}>
-            <div className={styles.card}>
-              <div className={styles.cardHeader}>
-                <h3>Excel File 1</h3>
+            <div className={styles.cardWrapper}>
+              <div className={styles.infoCard}>
+                <div className={styles.infoCardContent}>
+                  <div className={styles.infoRow}>
+                    <MoneyRegular className={styles.icon} />
+                    <div className={styles.infoText}>
+                      <h4>Total Amount</h4>
+                      <span className={styles.amount}>
+                        {noMatchSum1.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={styles.infoRow}>
+                    <DocumentRegular className={styles.icon} />
+                    <div className={styles.infoText}>
+                      <h4>Items</h4>
+                      <span className={styles.count}>
+                        {countNonBlankRows(noMatchesFile1)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className={styles.cardBody}>
-                <PartialMatch
-                  fileType={1}
-                  partialMatches={noMatchesFile1}
-                  setPartialMatchesSetter={setNoMatchesFile1}
-                  setSelectedRowData={setSelectedPartialRow1}
-                  onSumChange={setNoMatchSum1}
-                  cblColumnMappings={cblColumnMappings}
-                  insuranceColumnMappings={insuranceColumnMappings}
-                />
+              <div className={styles.card}>
+                <div className={styles.cardHeader}>
+                  <h3>CBL</h3>
+                  <Input
+                    type="text"
+                    placeholder="Search..."
+                    value={noMatchSearch1}
+                    onChange={(e) => setNoMatchSearch1(e.target.value)}
+                    contentBefore={<SearchRegular />}
+                    style={{ width: "200px" }}
+                  />
+                </div>
+                <div className={styles.cardBody}>
+                  <PartialMatch
+                    fileType={1}
+                    partialMatches={noMatchesFile1}
+                    setPartialMatchesSetter={setNoMatchesFile1}
+                    setSelectedRowData={setSelectedPartialRow1}
+                    onSumChange={setNoMatchSum1}
+                    cblColumnMappings={cblColumnMappings}
+                    insuranceColumnMappings={insuranceColumnMappings}
+                    filterText={noMatchSearch1}
+                  />
+                </div>
               </div>
             </div>
-            <div className={styles.card}>
-              <div className={styles.cardHeader}>
-                <h3>Excel File 2</h3>
+            <div className={styles.cardWrapper}>
+              <div className={styles.infoCard}>
+                <div className={styles.infoCardContent}>
+                  <div className={styles.infoRow}>
+                    <MoneyRegular className={styles.icon} />
+                    <div className={styles.infoText}>
+                      <h4>Total Amount</h4>
+                      <span className={styles.amount}>
+                        {noMatchSum2.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className={styles.infoRow}>
+                    <DocumentRegular className={styles.icon} />
+                    <div className={styles.infoText}>
+                      <h4>Items</h4>
+                      <span className={styles.count}>
+                        {countNonBlankRows(noMatchesFile2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className={styles.cardBody}>
-                <PartialMatch
-                  fileType={2}
-                  partialMatches={noMatchesFile2}
-                  setPartialMatchesSetter={setNoMatchesFile2}
-                  setSelectedRowData={setSelectedPartialRow2}
-                  onSumChange={setNoMatchSum2}
-                  cblColumnMappings={cblColumnMappings}
-                  insuranceColumnMappings={insuranceColumnMappings}
-                />
+              <div className={styles.card}>
+                <div className={styles.cardHeader}>
+                  <h3>{insuranceName}</h3>
+                  <Input
+                    type="text"
+                    placeholder="Search..."
+                    value={noMatchSearch2}
+                    onChange={(e) => setNoMatchSearch2(e.target.value)}
+                    contentBefore={<SearchRegular />}
+                    style={{ width: "200px" }}
+                  />
+                </div>
+                <div className={styles.cardBody}>
+                  <PartialMatch
+                    fileType={2}
+                    partialMatches={noMatchesFile2}
+                    setPartialMatchesSetter={setNoMatchesFile2}
+                    setSelectedRowData={setSelectedPartialRow2}
+                    onSumChange={setNoMatchSum2}
+                    cblColumnMappings={cblColumnMappings}
+                    insuranceColumnMappings={insuranceColumnMappings}
+                    filterText={noMatchSearch2}
+                  />
+                </div>
               </div>
             </div>
           </div>

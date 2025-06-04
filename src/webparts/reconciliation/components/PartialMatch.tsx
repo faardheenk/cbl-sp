@@ -11,6 +11,7 @@ type Props = {
   onSumChange: (sum: number) => void;
   cblColumnMappings: ColumnMappingType;
   insuranceColumnMappings: ColumnMappingType;
+  filterText: string;
 };
 
 function PartialMatch({
@@ -21,6 +22,7 @@ function PartialMatch({
   onSumChange,
   cblColumnMappings,
   insuranceColumnMappings,
+  filterText,
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
   // console.log("cblColumnMappings", cblColumnMappings);
@@ -32,14 +34,20 @@ function PartialMatch({
 
     if (fileType === 1) {
       const total = selectedData.reduce((acc, row) => {
-        console.log("row", row[cblColumnMappings.amount]);
-        console.log("total", acc + row[cblColumnMappings.amount]);
-        return acc + row[cblColumnMappings.amount];
+        const amount = isNaN(row[cblColumnMappings.amount])
+          ? 0
+          : row[cblColumnMappings.amount];
+        console.log("row", amount);
+        console.log("total", acc + amount);
+        return acc + amount;
       }, 0);
       onSumChange(total);
     } else if (fileType === 2) {
       const total = selectedData.reduce((acc, row) => {
-        return acc + row[insuranceColumnMappings.amount];
+        const amount = isNaN(row[insuranceColumnMappings.amount])
+          ? 0
+          : row[insuranceColumnMappings.amount];
+        return acc + amount;
       }, 0);
       onSumChange(total);
     }
@@ -106,6 +114,7 @@ function PartialMatch({
       data={partialMatches}
       handleRowClicked={handleRowClicked}
       conditionalRowStyles={conditionalRowStyles}
+      filterText={filterText}
     />
   );
 }
