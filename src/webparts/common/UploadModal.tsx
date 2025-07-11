@@ -67,62 +67,41 @@ const UploadModal: React.FC<UploadModalProps> = ({
       });
 
       // Base folder path
-      // const baseFolderPath = `${
-      //   context.pageContext.web.serverRelativeUrl
-      // }/Reconciliation Library/${selectedInsurance.toUpperCase()}`;
+      const baseFolderPath = `${
+        context.pageContext.web.serverRelativeUrl
+      }/Reconciliation Library/${selectedInsurance.toUpperCase()}`;
 
-      // // Create new folder with timestamp
-      // const newFolderPath = `${baseFolderPath}/${timestamp}`;
-      // const addFolder = await sp.web.folders.addUsingPath(newFolderPath);
+      // Create new folder with timestamp
+      const newFolderPath = `${baseFolderPath}/${formattedDate}`;
+      await sp.web.folders.addUsingPath(newFolderPath);
 
-      // const folderItem = await sp.web.getFolderByServerRelativePath(
-      //   newFolderPath
-      // );
+      // Get folder item to get ID
+      const folderItem = await sp.web.getFolderByServerRelativePath(
+        newFolderPath
+      );
+      const items = await folderItem.getItem();
+      const { Id: folderId } = await items();
 
-      // const items = await folderItem.getItem();
-      // const { Id: folderId } = await items();
+      // Create new folder name with ID
+      const newFolderName = `${formattedDate}_${folderId}`;
+      const updatedFolderPath = `${baseFolderPath}/${newFolderName}`;
 
-      // const newFolderName = `${timestamp}_${folderId}`;
+      // Rename folder
+      await sp.web
+        .getFolderByServerRelativePath(newFolderPath)
+        .getItem()
+        .then((item) => item.update({ FileLeafRef: newFolderName }));
 
-      // console.log(folderId);
-      // const test = await items.update({
-      //   FileLeafRef: newFolderName,
-      //   Status: "Pending",
-      // });
+      // Set folder status
+      await items.update({
+        Status: "Pending",
+      });
 
-      // const updatedFolderPath = `${baseFolderPath}/${newFolderName}`;
-      // const updateStatus = await sp.web
-      //   .getFolderByServerRelativePath(updatedFolderPath)
-      //   .update({
-      //     "Status": "Pending",
-      //   });
-
-      //   await sp.web.getFolderByServerRelativePath("Shared Documents/Folder2").update({
-      //     "Name": "New name",
-      // });
-      // // Get the folder's ID and rename it
-      // const folderItem = await sp.web
-      //   .getFolderByServerRelativePath(newFolderPath)
-      //   .listItemAllFields();
-      // const folderId = folderItem.Id;
-      // const newFolderName = `${timestamp}_${folderId}`;
-      // await sp.web
-      //   .getFolderByServerRelativePath(newFolderPath)
-      //   .update({ Name: newFolderName });
-
-      // // Update the folder path with the new name
-      // const updatedFolderPath = `${baseFolderPath}/${newFolderName}`;
-
-      // // Set the status on the folder's list item
-      // await folderItem.update({
-      //   Status: "Pending",
-      // });
-
-      // Upload files to the new folder
-      // await uploadExcelFiles(sp, [file1, file2], updatedFolderPath, [
-      //   file1.name,
-      //   file2.name,
-      // ]);
+      // Upload excel files to renamed folder
+      await uploadExcelFiles(sp, [file1, file2], updatedFolderPath, [
+        file1.name,
+        file2.name,
+      ]);
 
       dispatchToast(
         <Toast className="bg-success text-white rounded-3">
@@ -171,91 +150,92 @@ const UploadModal: React.FC<UploadModalProps> = ({
           </Modal.Title>
         </Modal.Header>
         <Modal.Body className={styles.modalBody}>
-          {showLoader ? (
-            <div
-              className="d-flex justify-content-center align-items-center"
-              style={{ height: "500px", width: "100%" }}
-            >
-              <div style={{ width: "100%", maxWidth: "500px" }}>
-                <RobotLoader />
+          {/* {showLoader ? (
+              <div
+                className="d-flex justify-content-center align-items-center"
+                style={{ height: "500px", width: "100%" }}
+              >
+                <div style={{ width: "100%", maxWidth: "500px" }}>
+                  <RobotLoader />
+                </div>
               </div>
+            ) : ( */}
+          <>
+            <Form.Group controlId="formInsurance" className="mb-3">
+              <Form.Label className={styles.formLabel}>
+                <i className="bi bi-building me-1" /> Insurance Name
+              </Form.Label>
+              <Form.Select
+                value={selectedInsurance}
+                onChange={(e) => setSelectedInsurance(e.target.value)}
+              >
+                {insuranceOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+            <Row>
+              <Col md={6} className="mb-3">
+                <Form.Group controlId="formFile1">
+                  <Form.Label className={styles.formLabel}>
+                    <i className="bi bi-file-earmark me-1" /> {file1Label}
+                  </Form.Label>
+                  <Form.Control
+                    type="file"
+                    accept=".xls,.xlsx"
+                    onChange={(e) =>
+                      setFile1(
+                        (e.target as HTMLInputElement).files?.[0] || null
+                      )
+                    }
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6} className="mb-3">
+                <Form.Group controlId="formFile2">
+                  <Form.Label className={styles.formLabel}>
+                    <i className="bi bi-file-earmark me-1" />{" "}
+                    {file2Label || selectedInsurance}
+                  </Form.Label>
+                  <Form.Control
+                    type="file"
+                    accept=".xls,.xlsx"
+                    onChange={(e) =>
+                      setFile2(
+                        (e.target as HTMLInputElement).files?.[0] || null
+                      )
+                    }
+                    required
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+            <div className="d-flex justify-content-end">
+              <Button
+                variant="light"
+                onClick={handleClose}
+                className={styles.cancelButton}
+              >
+                <i className="bi bi-x-circle me-1" /> Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={!file1 || !file2}
+                onClick={() => {
+                  setShowLoader(true);
+                  handleUpload(file1, file2, selectedInsurance);
+                  handleClose();
+                }}
+                className={styles.uploadButton}
+              >
+                <i className="bi bi-cloud-arrow-up me-1" /> Upload
+              </Button>
             </div>
-          ) : (
-            <>
-              <Form.Group controlId="formInsurance" className="mb-3">
-                <Form.Label className={styles.formLabel}>
-                  <i className="bi bi-building me-1" /> Insurance Name
-                </Form.Label>
-                <Form.Select
-                  value={selectedInsurance}
-                  onChange={(e) => setSelectedInsurance(e.target.value)}
-                >
-                  {insuranceOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </Form.Select>
-              </Form.Group>
-              <Row>
-                <Col md={6} className="mb-3">
-                  <Form.Group controlId="formFile1">
-                    <Form.Label className={styles.formLabel}>
-                      <i className="bi bi-file-earmark me-1" /> {file1Label}
-                    </Form.Label>
-                    <Form.Control
-                      type="file"
-                      accept=".xls,.xlsx"
-                      onChange={(e) =>
-                        setFile1(
-                          (e.target as HTMLInputElement).files?.[0] || null
-                        )
-                      }
-                      required
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={6} className="mb-3">
-                  <Form.Group controlId="formFile2">
-                    <Form.Label className={styles.formLabel}>
-                      <i className="bi bi-file-earmark me-1" />{" "}
-                      {file2Label || selectedInsurance}
-                    </Form.Label>
-                    <Form.Control
-                      type="file"
-                      accept=".xls,.xlsx"
-                      onChange={(e) =>
-                        setFile2(
-                          (e.target as HTMLInputElement).files?.[0] || null
-                        )
-                      }
-                      required
-                    />
-                  </Form.Group>
-                </Col>
-              </Row>
-              <div className="d-flex justify-content-end">
-                <Button
-                  variant="light"
-                  onClick={handleClose}
-                  className={styles.cancelButton}
-                >
-                  <i className="bi bi-x-circle me-1" /> Cancel
-                </Button>
-                <Button
-                  type="button"
-                  disabled={!file1 || !file2}
-                  onClick={() => {
-                    setShowLoader(true);
-                    handleUpload(file1, file2, selectedInsurance);
-                  }}
-                  className={styles.uploadButton}
-                >
-                  <i className="bi bi-cloud-arrow-up me-1" /> Upload
-                </Button>
-              </div>
-            </>
-          )}
+          </>
+          {/* )} */}
         </Modal.Body>
       </Modal>
     </>

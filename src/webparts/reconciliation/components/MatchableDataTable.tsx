@@ -14,7 +14,7 @@ type Props = {
   filterText: string;
 };
 
-function PartialMatch({
+function MatchableDataTable({
   partialMatches,
   setPartialMatchesSetter,
   setSelectedRowData,
@@ -119,4 +119,4 @@ function PartialMatch({
   );
 }
 
-export default PartialMatch;
+export default MatchableDataTable;
