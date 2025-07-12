@@ -16,21 +16,21 @@ import {
 } from "@fluentui/react-components";
 
 type SaveChangesProps = {
-  completeMatchFile1Worksheet: any[];
-  completeMatchFile2Worksheet: any[];
-  partialMatchesFile1: any[];
-  partialMatchesFile2: any[];
-  noMatchesFile1: any[];
-  noMatchesFile2: any[];
+  exactMatchCBL: any[];
+  exactMatchInsurer: any[];
+  partialMatchCBL: any[];
+  partialMatchInsurer: any[];
+  noMatchCBL: any[];
+  noMatchInsurer: any[];
 };
 
 function SaveChanges({
-  completeMatchFile1Worksheet,
-  completeMatchFile2Worksheet,
-  partialMatchesFile1,
-  partialMatchesFile2,
-  noMatchesFile1,
-  noMatchesFile2,
+  exactMatchCBL,
+  exactMatchInsurer,
+  partialMatchCBL,
+  partialMatchInsurer,
+  noMatchCBL,
+  noMatchInsurer,
 }: SaveChangesProps) {
   const { context, sp } = useSpContext();
   const { changes, setChanges } = useChanges();
@@ -50,10 +50,10 @@ function SaveChanges({
         setIsSaving(true);
         const res = await saveExcel(
           sp,
-          cleanData(completeMatchFile1Worksheet, completeMatchFile2Worksheet),
-          cleanData(partialMatchesFile1, partialMatchesFile2),
-          noMatchesFile1,
-          noMatchesFile2,
+          cleanData(exactMatchCBL, exactMatchInsurer),
+          cleanData(partialMatchCBL, partialMatchInsurer),
+          cleanData(noMatchCBL, noMatchInsurer),
+          cleanData(noMatchInsurer, noMatchCBL),
           `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25`
         );
         if (res.status === 200) {

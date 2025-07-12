@@ -26,17 +26,15 @@ function Reconciliation() {
   const { context, sp } = useSpContext();
   const { updateTaskStatus, tasks } = useTasks();
   const { setChanges } = useChanges();
-  const [completeMatchFile1Worksheet, setCompleteMatchFile1Worksheet] =
-    useState<any[]>([]);
-  const [completeMatchFile2Worksheet, setCompleteMatchFile2Worksheet] =
-    useState<any[]>([]);
-  const [partialMatchesFile1, setPartialMatchesFile1] = useState<any[]>([]);
-  const [partialMatchesFile2, setPartialMatchesFile2] = useState<any[]>([]);
-  const [selectedRow1, setSelectedRow1] = useState<any[]>([]);
-  const [selectedRow2, setSelectedRow2] = useState<any[]>([]);
+  const [exactMatchCBL, setExactMatchCBL] = useState<any[]>([]);
+  const [exactMatchInsurer, setExactMatchInsurer] = useState<any[]>([]);
+  const [partialMatchCBL, setPartialMatchCBL] = useState<any[]>([]);
+  const [partialMatchInsurer, setPartialMatchInsurer] = useState<any[]>([]);
+  const [selectedRowCBL, setSelectedRowCBL] = useState<any[]>([]);
+  const [selectedRowInsurer, setSelectedRowInsurer] = useState<any[]>([]);
   const [isClicked, setIsClicked] = useState(false);
-  const [noMatchesFile1, setNoMatchesFile1] = useState<any[]>([]);
-  const [noMatchesFile2, setNoMatchesFile2] = useState<any[]>([]);
+  const [noMatchCBL, setNoMatchCBL] = useState<any[]>([]);
+  const [noMatchInsurer, setNoMatchInsurer] = useState<any[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [currentManualMatchGroup, setCurrentManualMatchGroup] =
@@ -74,24 +72,24 @@ function Reconciliation() {
   const urlParams = new URLSearchParams(window.location.search);
   const insuranceName = urlParams.get("Insurance");
 
-  const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/Processed.xlsx`;
+  const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25/output.xlsx`;
 
   useEffect(() => {
     const fetchData = async () => {
       const {
-        completeMatchesFile1,
-        completeMatchesFile2,
-        partialMatchesFile1,
-        partialMatchesFile2,
-        noMatchesFile1,
-        noMatchesFile2,
+        exactMatchCBL,
+        exactMatchInsurer,
+        partialMatchCBL,
+        partialMatchInsurer,
+        noMatchCBL,
+        noMatchInsurer,
       } = await fetchFile(url, sp);
-      setCompleteMatchFile1Worksheet(completeMatchesFile1);
-      setCompleteMatchFile2Worksheet(completeMatchesFile2);
-      setPartialMatchesFile1(partialMatchesFile1);
-      setPartialMatchesFile2(partialMatchesFile2);
-      setNoMatchesFile1(noMatchesFile1);
-      setNoMatchesFile2(noMatchesFile2);
+      setExactMatchCBL(exactMatchCBL);
+      setExactMatchInsurer(exactMatchInsurer);
+      setPartialMatchCBL(partialMatchCBL);
+      setPartialMatchInsurer(partialMatchInsurer);
+      setNoMatchCBL(noMatchCBL);
+      setNoMatchInsurer(noMatchInsurer);
     };
 
     const fetchColumnMappings = async () => {
@@ -116,16 +114,16 @@ function Reconciliation() {
 
   useEffect(() => {
     const { sum1, sum2 } = calculateSum(
-      completeMatchFile1Worksheet,
-      completeMatchFile2Worksheet,
+      exactMatchCBL,
+      exactMatchInsurer,
       cblColumnMappings,
       insuranceColumnMappings
     );
     setExactMatchSum1(sum1);
     setExactMatchSum2(sum2);
   }, [
-    completeMatchFile1Worksheet,
-    completeMatchFile2Worksheet,
+    exactMatchCBL,
+    exactMatchInsurer,
     cblColumnMappings,
     insuranceColumnMappings,
   ]);
@@ -147,43 +145,43 @@ function Reconciliation() {
   };
 
   const handleMoveToExactMatch = async () => {
-    if (selectedRow1.length > 0 && selectedRow2.length > 0) {
+    if (selectedRowCBL.length > 0 && selectedRowInsurer.length > 0) {
       setChanges(true);
 
-      const updatedPartialMatchesFile1 = clearSelectedRows(
-        partialMatchesFile1,
-        selectedRow1,
+      const updatedPartialMatchesCBL = clearSelectedRows(
+        partialMatchCBL,
+        selectedRowCBL,
         "row_id_1"
       );
-      const updatedPartialMatchesFile2 = clearSelectedRows(
-        partialMatchesFile2,
-        selectedRow2,
+      const updatedPartialMatchesInsurer = clearSelectedRows(
+        partialMatchInsurer,
+        selectedRowInsurer,
         "row_id_2"
       );
 
-      setPartialMatchesFile1(updatedPartialMatchesFile1);
-      setPartialMatchesFile2(updatedPartialMatchesFile2);
+      setPartialMatchCBL(updatedPartialMatchesCBL);
+      setPartialMatchInsurer(updatedPartialMatchesInsurer);
 
       const nextMatchGroup = getNextMatchGroup(
-        completeMatchFile1Worksheet,
-        completeMatchFile2Worksheet
+        exactMatchCBL,
+        exactMatchInsurer
       );
 
       const selectedRowsWithGroup1 = addGroupAndCondition(
-        selectedRow1,
+        selectedRowCBL,
         nextMatchGroup
       );
       const selectedRowsWithGroup2 = addGroupAndCondition(
-        selectedRow2,
+        selectedRowInsurer,
         nextMatchGroup
       );
 
       let newCompleteMatchFile1Worksheet = [
-        ...completeMatchFile1Worksheet,
+        ...exactMatchCBL,
         ...selectedRowsWithGroup1,
       ];
       let newCompleteMatchFile2Worksheet = [
-        ...completeMatchFile2Worksheet,
+        ...exactMatchInsurer,
         ...selectedRowsWithGroup2,
       ];
 
@@ -194,18 +192,18 @@ function Reconciliation() {
           nextMatchGroup
         );
 
-      setCompleteMatchFile1Worksheet(newCompleteMatchFile1Worksheet);
-      setCompleteMatchFile2Worksheet(newCompleteMatchFile2Worksheet);
+      setExactMatchCBL(newCompleteMatchFile1Worksheet);
+      setExactMatchInsurer(newCompleteMatchFile2Worksheet);
 
-      setNoMatchesFile1(
-        filterOutSelectedRows(noMatchesFile1, selectedRow1, "row_id_1")
+      setNoMatchCBL(
+        filterOutSelectedRows(noMatchCBL, selectedRowCBL, "row_id_1")
       );
-      setNoMatchesFile2(
-        filterOutSelectedRows(noMatchesFile2, selectedRow2, "row_id_2")
+      setNoMatchInsurer(
+        filterOutSelectedRows(noMatchInsurer, selectedRowInsurer, "row_id_2")
       );
 
-      setSelectedRow1([]);
-      setSelectedRow2([]);
+      setSelectedRowCBL([]);
+      setSelectedRowInsurer([]);
     }
   };
 
@@ -225,25 +223,25 @@ function Reconciliation() {
           partialMatchSum2={partialMatchSum2}
           noMatchSum1={noMatchSum1}
           noMatchSum2={noMatchSum2}
-          completeMatchFile1Worksheet={completeMatchFile1Worksheet}
-          completeMatchFile2Worksheet={completeMatchFile2Worksheet}
-          partialMatchesFile1={partialMatchesFile1}
-          partialMatchesFile2={partialMatchesFile2}
-          noMatchesFile1={noMatchesFile1}
-          noMatchesFile2={noMatchesFile2}
+          exactMatchCBL={exactMatchCBL}
+          exactMatchInsurer={exactMatchInsurer}
+          partialMatchCBL={partialMatchCBL}
+          partialMatchInsurer={partialMatchInsurer}
+          noMatchCBL={noMatchCBL}
+          noMatchInsurer={noMatchInsurer}
           insuranceName={insuranceName || ""}
         />
 
         <ExactMatches
-          completeMatchFile1Worksheet={completeMatchFile1Worksheet}
-          completeMatchFile2Worksheet={completeMatchFile2Worksheet}
+          exactMatchCBL={exactMatchCBL}
+          exactMatchInsurer={exactMatchInsurer}
           exactMatchSum1={exactMatchSum1}
           exactMatchSum2={exactMatchSum2}
           insuranceName={insuranceName || ""}
-          partialMatchesFile1={partialMatchesFile1}
-          partialMatchesFile2={partialMatchesFile2}
-          noMatchesFile1={noMatchesFile1}
-          noMatchesFile2={noMatchesFile2}
+          partialMatchCBL={partialMatchCBL}
+          partialMatchInsurer={partialMatchInsurer}
+          noMatchCBL={noMatchCBL}
+          noMatchInsurer={noMatchInsurer}
         />
 
         {/* Partial Matches Header */}
@@ -252,7 +250,9 @@ function Reconciliation() {
           <Button
             className={styles.btn}
             appearance="primary"
-            disabled={selectedRow1.length === 0 || selectedRow2.length === 0}
+            disabled={
+              selectedRowCBL.length === 0 || selectedRowInsurer.length === 0
+            }
             onClick={handleMoveToExactMatch}
           >
             Move to exact match
@@ -264,18 +264,18 @@ function Reconciliation() {
           title="Partial Matches"
           sum1={partialMatchSum1}
           sum2={partialMatchSum2}
-          dataFile1={partialMatchesFile1}
-          dataFile2={partialMatchesFile2}
+          dataFile1={partialMatchCBL}
+          dataFile2={partialMatchInsurer}
           search1={partialMatchSearch1}
           search2={partialMatchSearch2}
           setSearch1={setPartialMatchSearch1}
           setSearch2={setPartialMatchSearch2}
           setSum1={setPartialMatchSum1}
           setSum2={setPartialMatchSum2}
-          setMatchesFile1={setPartialMatchesFile1}
-          setMatchesFile2={setPartialMatchesFile2}
-          setSelectedRowData1={setSelectedRow1}
-          setSelectedRowData2={setSelectedRow2}
+          setMatchesFile1={setPartialMatchCBL}
+          setMatchesFile2={setPartialMatchInsurer}
+          setSelectedRowData1={setSelectedRowCBL}
+          setSelectedRowData2={setSelectedRowInsurer}
           cblColumnMappings={cblColumnMappings}
           insuranceColumnMappings={insuranceColumnMappings}
           insuranceName={insuranceName || ""}
@@ -286,18 +286,18 @@ function Reconciliation() {
           title="No Matches"
           sum1={noMatchSum1}
           sum2={noMatchSum2}
-          dataFile1={noMatchesFile1}
-          dataFile2={noMatchesFile2}
+          dataFile1={noMatchCBL}
+          dataFile2={noMatchInsurer}
           search1={noMatchSearch1}
           search2={noMatchSearch2}
           setSearch1={setNoMatchSearch1}
           setSearch2={setNoMatchSearch2}
           setSum1={setNoMatchSum1}
           setSum2={setNoMatchSum2}
-          setMatchesFile1={setNoMatchesFile1}
-          setMatchesFile2={setNoMatchesFile2}
-          setSelectedRowData1={setSelectedRow1}
-          setSelectedRowData2={setSelectedRow2}
+          setMatchesFile1={setNoMatchCBL}
+          setMatchesFile2={setNoMatchInsurer}
+          setSelectedRowData1={setSelectedRowCBL}
+          setSelectedRowData2={setSelectedRowInsurer}
           cblColumnMappings={cblColumnMappings}
           insuranceColumnMappings={insuranceColumnMappings}
           insuranceName={insuranceName || ""}

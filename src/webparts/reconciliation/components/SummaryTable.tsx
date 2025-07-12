@@ -10,12 +10,12 @@ type SummaryTableProps = {
   partialMatchSum2: number;
   noMatchSum1: number;
   noMatchSum2: number;
-  completeMatchFile1Worksheet: any[];
-  completeMatchFile2Worksheet: any[];
-  partialMatchesFile1: any[];
-  partialMatchesFile2: any[];
-  noMatchesFile1: any[];
-  noMatchesFile2: any[];
+  exactMatchCBL: any[];
+  exactMatchInsurer: any[];
+  partialMatchCBL: any[];
+  partialMatchInsurer: any[];
+  noMatchCBL: any[];
+  noMatchInsurer: any[];
   insuranceName: string;
 };
 function SummaryTable({
@@ -25,12 +25,12 @@ function SummaryTable({
   partialMatchSum2,
   noMatchSum1,
   noMatchSum2,
-  completeMatchFile1Worksheet,
-  completeMatchFile2Worksheet,
-  partialMatchesFile1,
-  partialMatchesFile2,
-  noMatchesFile1,
-  noMatchesFile2,
+  exactMatchCBL,
+  exactMatchInsurer,
+  partialMatchCBL,
+  partialMatchInsurer,
+  noMatchCBL,
+  noMatchInsurer,
   insuranceName,
 }: SummaryTableProps) {
   return (
@@ -66,7 +66,7 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(completeMatchFile1Worksheet)} lines
+                      {countNonBlankRows(exactMatchCBL)} lines
                     </span>
                   </div>
                 </div>
@@ -90,7 +90,7 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(partialMatchesFile1)} lines
+                      {countNonBlankRows(partialMatchCBL)} lines
                     </span>
                   </div>
                 </div>
@@ -114,7 +114,7 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(noMatchesFile1)} lines
+                      {countNonBlankRows(noMatchCBL)} lines
                     </span>
                   </div>
                 </div>
@@ -145,7 +145,7 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(completeMatchFile2Worksheet)} lines
+                      {countNonBlankRows(exactMatchInsurer)} lines
                     </span>
                   </div>
                 </div>
@@ -169,7 +169,7 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(partialMatchesFile2)} lines
+                      {countNonBlankRows(partialMatchInsurer)} lines
                     </span>
                   </div>
                 </div>
@@ -193,7 +193,7 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(noMatchesFile2)} lines
+                      {countNonBlankRows(noMatchInsurer)} lines
                     </span>
                   </div>
                 </div>

@@ -9,27 +9,27 @@ import InfoCard from "./InfoCard";
 import SaveChanges from "./SaveChanges";
 
 type ExactMatchesProps = {
-  completeMatchFile1Worksheet: any[];
-  completeMatchFile2Worksheet: any[];
+  exactMatchCBL: any[];
+  exactMatchInsurer: any[];
   exactMatchSum1: number;
   exactMatchSum2: number;
   insuranceName: string;
-  partialMatchesFile1: any[];
-  partialMatchesFile2: any[];
-  noMatchesFile1: any[];
-  noMatchesFile2: any[];
+  partialMatchCBL: any[];
+  partialMatchInsurer: any[];
+  noMatchCBL: any[];
+  noMatchInsurer: any[];
 };
 
 function ExactMatches({
-  completeMatchFile1Worksheet,
-  completeMatchFile2Worksheet,
+  exactMatchCBL,
+  exactMatchInsurer,
   exactMatchSum1,
   exactMatchSum2,
   insuranceName,
-  partialMatchesFile1,
-  partialMatchesFile2,
-  noMatchesFile1,
-  noMatchesFile2,
+  partialMatchCBL,
+  partialMatchInsurer,
+  noMatchCBL,
+  noMatchInsurer,
 }: ExactMatchesProps) {
   const [exactMatchSearch1, setExactMatchSearch1] = useState("");
   const [exactMatchSearch2, setExactMatchSearch2] = useState("");
@@ -39,20 +39,17 @@ function ExactMatches({
       <div className={styles.partialHeader}>
         <h5>Exact Matches</h5>
         <SaveChanges
-          completeMatchFile1Worksheet={completeMatchFile1Worksheet}
-          completeMatchFile2Worksheet={completeMatchFile2Worksheet}
-          partialMatchesFile1={partialMatchesFile1}
-          partialMatchesFile2={partialMatchesFile2}
-          noMatchesFile1={noMatchesFile1}
-          noMatchesFile2={noMatchesFile2}
+          exactMatchCBL={exactMatchCBL}
+          exactMatchInsurer={exactMatchInsurer}
+          partialMatchCBL={partialMatchCBL}
+          partialMatchInsurer={partialMatchInsurer}
+          noMatchCBL={noMatchCBL}
+          noMatchInsurer={noMatchInsurer}
         />
       </div>
       <div className={styles.reconciliationContainer}>
         <div className={styles.cardWrapper}>
-          <InfoCard
-            exactMatchSum1={exactMatchSum1}
-            worksheet={completeMatchFile1Worksheet}
-          />
+          <InfoCard exactMatchSum1={exactMatchSum1} worksheet={exactMatchCBL} />
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <h3>CBL</h3>
@@ -66,10 +63,7 @@ function ExactMatches({
               />
             </div>
             <div className={styles.cardBody}>
-              <Datatable
-                data={completeMatchFile1Worksheet}
-                filterText={exactMatchSearch1}
-              />
+              <Datatable data={exactMatchCBL} filterText={exactMatchSearch1} />
             </div>
           </div>
         </div>
@@ -90,7 +84,7 @@ function ExactMatches({
                 <div className={styles.infoText}>
                   <h4>Items</h4>
                   <span className={styles.count}>
-                    {countNonBlankRows(completeMatchFile2Worksheet)}
+                    {countNonBlankRows(exactMatchInsurer)}
                   </span>
                 </div>
               </div>
@@ -110,7 +104,7 @@ function ExactMatches({
             </div>
             <div className={styles.cardBody}>
               <Datatable
-                data={completeMatchFile2Worksheet}
+                data={exactMatchInsurer}
                 filterText={exactMatchSearch2}
               />
             </div>
