@@ -10,12 +10,31 @@ import styles from "./Header.module.scss";
 import UploadModal from "./UploadModal";
 import { useSpContext } from "../../SpContext";
 import { uploadExcelFiles } from "../../lib/uploadFiles";
+import { useReconciliation } from "../../context/ReconciliationContext";
+import { mergeData } from "../../lib/filterData";
+import { exportReport } from "../../lib/exportReport";
+import * as XLSX from "xlsx";
 
 const Header: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const { context, sp } = useSpContext();
+  const {
+    exactMatchSum1,
+    exactMatchSum2,
+    partialMatchSum1,
+    partialMatchSum2,
+    noMatchSum1,
+    noMatchSum2,
+    exactMatchCBL,
+    exactMatchInsurer,
+    partialMatchCBL,
+    partialMatchInsurer,
+    noMatchCBL,
+    noMatchInsurer,
+  } = useReconciliation();
 
   const urlParams = new URLSearchParams(window.location.search);
+  const insuranceName = urlParams.get("Insurance");
   const pathParts = window.location.pathname.split("/");
   const pageName = pathParts[pathParts.length - 1].split(".")[0]; // Gets "Reconciliation"
   console.log("Page name:", pageName);
@@ -35,6 +54,31 @@ const Header: React.FC = () => {
   const handleExportReport = () => {
     // TODO: Implement export report functionality
     console.log("Export report clicked");
+    const mergedExactMatch = mergeData(exactMatchCBL, exactMatchInsurer);
+    const mergedPartialMatch = mergeData(partialMatchCBL, partialMatchInsurer);
+
+    const workbook = exportReport(
+      exactMatchSum1,
+      exactMatchSum2,
+      partialMatchSum1,
+      partialMatchSum2,
+      noMatchSum1,
+      noMatchSum2,
+      mergedExactMatch,
+      mergedPartialMatch,
+      noMatchCBL,
+      noMatchInsurer,
+      insuranceName || ""
+    );
+
+    // Generate filename with current date
+    const date = new Date().toISOString().split("T")[0];
+    const filename = `reconciliation-report-${date}-${insuranceName}.xlsx`;
+
+    // Write the file and trigger download
+    XLSX.writeFile(workbook, filename);
+
+    console.log("Merged exact match:", mergedExactMatch);
   };
 
   return (

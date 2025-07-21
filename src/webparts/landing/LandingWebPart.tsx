@@ -6,6 +6,7 @@ import Landing from "./components/Landing";
 import { SpContext } from "../../SpContext";
 import { TaskProvider } from "../../context/TaskContext";
 import { getSP } from "../../pnpjsConfig";
+import { ReconciliationProvider } from "../../context/ReconciliationContext";
 
 export interface ILandingWebPartProps {
   description: string;
@@ -18,7 +19,9 @@ export default class LandingWebPart extends BaseClientSideWebPart<{}> {
     const element: React.ReactElement = (
       <SpContext.Provider value={{ context: this.context, sp }}>
         <TaskProvider context={this.context}>
-          <Landing />
+          <ReconciliationProvider>
+            <Landing />
+          </ReconciliationProvider>
         </TaskProvider>
       </SpContext.Provider>
       // <Reconciliation />

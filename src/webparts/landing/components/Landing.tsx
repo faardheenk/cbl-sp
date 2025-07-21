@@ -68,7 +68,7 @@ const Landing = () => {
                     const status = folderProps.Status || "Pending";
 
                     return {
-                      date: formatDate(dateFolder.Name),
+                      date: dateFolder.Name.split("_")[0],
                       insurance: insuranceName,
                       status: status as
                         | "Pending"
@@ -76,7 +76,7 @@ const Landing = () => {
                         | "Manual Review"
                         | "Completed"
                         | "Failed",
-                      url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx?Insurance=${insuranceName}`,
+                      url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx?Insurance=${insuranceName}&Date=${dateFolder.Name}`,
                     };
                   })
               );
@@ -158,53 +158,67 @@ const Landing = () => {
               </tr>
             </thead>
             <tbody>
-              {tasks.map((t, idx) => (
-                <tr
-                  key={idx}
-                  style={{
-                    backgroundColor: "#FFFFFF",
-                    borderRadius: "0.75rem",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                  }}
-                >
-                  <td
-                    style={{ padding: "1rem 1.5rem", color: COLORS.headerText }}
-                  >
-                    {t.date}
-                  </td>
-                  <td
-                    style={{ padding: "1rem 1.5rem", color: COLORS.headerText }}
-                  >
-                    {t.insurance}
-                  </td>
-                  <td style={{ padding: "1rem 1.5rem" }}>
-                    <Badge
-                      bg={badgeVariant(t.status)}
-                      pill
-                      style={{ fontSize: "0.75rem", padding: "0.5rem 0.75rem" }}
-                    >
-                      {t.status}
-                    </Badge>
-                  </td>
-                  <td style={{ padding: "1rem 1.5rem" }}>
-                    <Button
-                      variant="outline-secondary"
+              {tasks.map(
+                (t, idx) => (
+                  console.log("T >>> ", t),
+                  (
+                    <tr
+                      key={idx}
                       style={{
-                        borderColor: COLORS.secondary,
-                        fontSize: "0.75rem",
-                        padding: "0.5rem 0.75rem",
-                        borderRadius: "0.5rem",
-                      }}
-                      size="sm"
-                      onClick={() => {
-                        window.open(t.url, "_blank");
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: "0.75rem",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
                       }}
                     >
-                      View
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+                      <td
+                        style={{
+                          padding: "1rem 1.5rem",
+                          color: COLORS.headerText,
+                        }}
+                      >
+                        {t.date}
+                      </td>
+                      <td
+                        style={{
+                          padding: "1rem 1.5rem",
+                          color: COLORS.headerText,
+                        }}
+                      >
+                        {t.insurance}
+                      </td>
+                      <td style={{ padding: "1rem 1.5rem" }}>
+                        <Badge
+                          bg={badgeVariant(t.status)}
+                          pill
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "0.5rem 0.75rem",
+                          }}
+                        >
+                          {t.status}
+                        </Badge>
+                      </td>
+                      <td style={{ padding: "1rem 1.5rem" }}>
+                        <Button
+                          variant="outline-secondary"
+                          style={{
+                            borderColor: COLORS.secondary,
+                            fontSize: "0.75rem",
+                            padding: "0.5rem 0.75rem",
+                            borderRadius: "0.5rem",
+                          }}
+                          size="sm"
+                          onClick={() => {
+                            window.open(t.url, "_blank");
+                          }}
+                        >
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                )
+              )}
             </tbody>
           </Table>
         </div>

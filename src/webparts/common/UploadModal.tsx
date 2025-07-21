@@ -27,7 +27,7 @@ const UploadModal: React.FC<UploadModalProps> = ({
   show,
   onClose,
   insuranceOptions,
-  file1Label = "CBL",
+  file1Label = "CBL", // to change to CBL
   file2Label,
 }) => {
   const [file1, setFile1] = useState<File | null>(null);

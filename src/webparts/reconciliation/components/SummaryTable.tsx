@@ -2,37 +2,28 @@ import React from "react";
 import styles from "./Reconciliation.module.scss";
 import { MoneyRegular, DocumentRegular } from "@fluentui/react-icons";
 import { countNonBlankRows, formatAmount } from "../../../lib/utils";
+import { useReconciliation } from "../../../context/ReconciliationContext";
 
 type SummaryTableProps = {
-  exactMatchSum1: number;
-  exactMatchSum2: number;
-  partialMatchSum1: number;
-  partialMatchSum2: number;
-  noMatchSum1: number;
-  noMatchSum2: number;
-  exactMatchCBL: any[];
-  exactMatchInsurer: any[];
-  partialMatchCBL: any[];
-  partialMatchInsurer: any[];
-  noMatchCBL: any[];
-  noMatchInsurer: any[];
   insuranceName: string;
 };
-function SummaryTable({
-  exactMatchSum1,
-  exactMatchSum2,
-  partialMatchSum1,
-  partialMatchSum2,
-  noMatchSum1,
-  noMatchSum2,
-  exactMatchCBL,
-  exactMatchInsurer,
-  partialMatchCBL,
-  partialMatchInsurer,
-  noMatchCBL,
-  noMatchInsurer,
-  insuranceName,
-}: SummaryTableProps) {
+function SummaryTable({ insuranceName }: SummaryTableProps) {
+  const {
+    exactMatchSum1,
+    exactMatchSum2,
+    partialMatchSum1,
+    partialMatchSum2,
+    noMatchSum1,
+    noMatchSum2,
+    exactMatchCBL,
+    exactMatchInsurer,
+    partialMatchCBL,
+    partialMatchInsurer,
+    noMatchCBL,
+    noMatchInsurer,
+    cblColumnMappings,
+    insuranceColumnMappings,
+  } = useReconciliation();
   return (
     <>
       <div className={styles.summaryTable}>
@@ -66,7 +57,8 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(exactMatchCBL)} lines
+                      {countNonBlankRows(exactMatchCBL, cblColumnMappings)}{" "}
+                      lines
                     </span>
                   </div>
                 </div>
@@ -90,7 +82,11 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(partialMatchCBL)} lines
+                      {countNonBlankRows(
+                        partialMatchCBL,
+                        cblColumnMappings
+                      )}{" "}
+                      lines
                     </span>
                   </div>
                 </div>
@@ -114,7 +110,7 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(noMatchCBL)} lines
+                      {countNonBlankRows(noMatchCBL, cblColumnMappings)} lines
                     </span>
                   </div>
                 </div>
@@ -145,7 +141,11 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(exactMatchInsurer)} lines
+                      {countNonBlankRows(
+                        exactMatchInsurer,
+                        insuranceColumnMappings
+                      )}{" "}
+                      lines
                     </span>
                   </div>
                 </div>
@@ -169,7 +169,11 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(partialMatchInsurer)} lines
+                      {countNonBlankRows(
+                        partialMatchInsurer,
+                        insuranceColumnMappings
+                      )}{" "}
+                      lines
                     </span>
                   </div>
                 </div>
@@ -193,7 +197,11 @@ function SummaryTable({
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(noMatchInsurer)} lines
+                      {countNonBlankRows(
+                        noMatchInsurer,
+                        insuranceColumnMappings
+                      )}{" "}
+                      lines
                     </span>
                   </div>
                 </div>

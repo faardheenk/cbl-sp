@@ -71,13 +71,7 @@ function Datatable({
 
   const columns: TableColumn<any>[] = data.length
     ? Object.keys(data[0])
-        .filter(
-          (key) =>
-            key !== "row_id_1" &&
-            key !== "row_id_2" &&
-            key !== "match_condition" &&
-            key !== "match_group"
-        )
+        .filter((key) => key !== "idx")
         .map((key) => ({
           name: key,
           selector: (row) => row[key],

@@ -37,11 +37,11 @@ function MatchableDataTable({
         const amount = isNaN(row[cblColumnMappings.amount])
           ? 0
           : row[cblColumnMappings.amount];
-        console.log("row", amount);
-        console.log("total", acc + amount);
+        // console.log("row", amount);
+        // console.log("total", acc + amount);
         return acc + amount;
       }, 0);
-      onSumChange(total);
+      // onSumChange(total);
     } else if (fileType === 2) {
       const total = selectedData.reduce((acc, row) => {
         const amount = isNaN(row[insuranceColumnMappings.amount])
@@ -49,7 +49,7 @@ function MatchableDataTable({
           : row[insuranceColumnMappings.amount];
         return acc + amount;
       }, 0);
-      onSumChange(total);
+      // onSumChange(total);
     }
   }, [
     selectedRows,
@@ -74,17 +74,17 @@ function MatchableDataTable({
 
     // Toggle selection
     setSelectedRows((prev) => {
-      if (prev.includes(row.row_id_1)) {
-        return prev.filter((id) => id !== row.row_id_1);
+      if (prev.includes(row.idx)) {
+        return prev.filter((id) => id !== row.idx);
       } else {
-        return [...prev, row.row_id_1];
+        return [...prev, row.idx];
       }
     });
 
     if (setSelectedRowData) {
       setSelectedRowData((prev) => {
-        if (prev.some((r) => r.row_id_1 === row.row_id_1)) {
-          return prev.filter((r) => r.row_id_1 !== row.row_id_1);
+        if (prev.some((r) => r.idx === row.idx)) {
+          return prev.filter((r) => r.idx !== row.idx);
         } else {
           return [...prev, { ...row, match_condition: "manual match" }];
         }
@@ -94,7 +94,7 @@ function MatchableDataTable({
 
   const conditionalRowStyles = [
     {
-      when: (row: any) => selectedRows.includes(row.row_id_1),
+      when: (row: any) => selectedRows.includes(row.idx),
       style: {
         backgroundColor: "rgba(68, 129, 221, 0.1)",
         userSelect: "none" as const,

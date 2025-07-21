@@ -7,6 +7,7 @@ import { Version } from "@microsoft/sp-core-library";
 import { getSP } from "../../pnpjsConfig";
 import { TaskProvider } from "../../context/TaskContext";
 import { ChangesProvider } from "../../context/ChangesContext";
+import { ReconciliationProvider } from "../../context/ReconciliationContext";
 
 export default class ReconciliationWebPart extends BaseClientSideWebPart<{}> {
   public render(): void {
@@ -16,7 +17,9 @@ export default class ReconciliationWebPart extends BaseClientSideWebPart<{}> {
       <SpContext.Provider value={{ context: this.context, sp }}>
         <TaskProvider context={this.context}>
           <ChangesProvider>
-            <Reconciliation />
+            <ReconciliationProvider>
+              <Reconciliation />
+            </ReconciliationProvider>
           </ChangesProvider>
         </TaskProvider>
       </SpContext.Provider>

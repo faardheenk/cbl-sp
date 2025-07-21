@@ -8,48 +8,67 @@ import { Input } from "@fluentui/react-components";
 import styles from "./Reconciliation.module.scss";
 import { countNonBlankRows } from "../../../lib/utils";
 import MatchableDataTable from "./MatchableDataTable";
+import { useReconciliation } from "../../../context/ReconciliationContext";
 
 type MatchableComponentProps = {
-  sum1: number;
-  sum2: number;
-  dataFile1: any[];
-  dataFile2: any[];
-  search1: string;
-  search2: string;
-  setSearch1: (value: string) => void;
-  setSearch2: (value: string) => void;
-  setSum1: (value: number) => void;
-  setSum2: (value: number) => void;
-  setMatchesFile1: (value: any[]) => void;
-  setMatchesFile2: (value: any[]) => void;
-  setSelectedRowData1: (value: any) => void;
-  setSelectedRowData2: (value: any) => void;
-  cblColumnMappings: any;
-  insuranceColumnMappings: any;
   insuranceName: string;
   title?: string;
+  type: "partial" | "no-match";
 };
 
 function MatchableComponent({
-  sum1,
-  sum2,
-  dataFile1,
-  dataFile2,
-  search1,
-  search2,
-  setSearch1,
-  setSearch2,
-  setSum1,
-  setSum2,
-  setMatchesFile1,
-  setMatchesFile2,
-  setSelectedRowData1,
-  setSelectedRowData2,
-  cblColumnMappings,
-  insuranceColumnMappings,
   insuranceName,
   title,
+  type,
 }: MatchableComponentProps) {
+  const {
+    partialMatchCBL,
+    setPartialMatchCBL,
+    partialMatchInsurer,
+    setPartialMatchInsurer,
+    noMatchCBL,
+    setNoMatchCBL,
+    noMatchInsurer,
+    setNoMatchInsurer,
+    partialMatchSum1,
+    setPartialMatchSum1,
+    partialMatchSum2,
+    setPartialMatchSum2,
+    noMatchSum1,
+    setNoMatchSum1,
+    noMatchSum2,
+    setNoMatchSum2,
+    partialMatchSearch1,
+    setPartialMatchSearch1,
+    partialMatchSearch2,
+    setPartialMatchSearch2,
+    noMatchSearch1,
+    setNoMatchSearch1,
+    noMatchSearch2,
+    setNoMatchSearch2,
+    setSelectedRowCBL,
+    setSelectedRowInsurer,
+    cblColumnMappings,
+    insuranceColumnMappings,
+  } = useReconciliation();
+
+  // Determine which data to use based on type
+  const dataFile1 = type === "partial" ? partialMatchCBL : noMatchCBL;
+  const dataFile2 = type === "partial" ? partialMatchInsurer : noMatchInsurer;
+  const sum1 = type === "partial" ? partialMatchSum1 : noMatchSum1;
+  const sum2 = type === "partial" ? partialMatchSum2 : noMatchSum2;
+  const search1 = type === "partial" ? partialMatchSearch1 : noMatchSearch1;
+  const search2 = type === "partial" ? partialMatchSearch2 : noMatchSearch2;
+  const setSearch1 =
+    type === "partial" ? setPartialMatchSearch1 : setNoMatchSearch1;
+  const setSearch2 =
+    type === "partial" ? setPartialMatchSearch2 : setNoMatchSearch2;
+  const setSum1 = type === "partial" ? setPartialMatchSum1 : setNoMatchSum1;
+  const setSum2 = type === "partial" ? setPartialMatchSum2 : setNoMatchSum2;
+  const setMatchesFile1 =
+    type === "partial" ? setPartialMatchCBL : setNoMatchCBL;
+  const setMatchesFile2 =
+    type === "partial" ? setPartialMatchInsurer : setNoMatchInsurer;
   return (
     <>
       <div>
@@ -70,7 +89,7 @@ function MatchableComponent({
                   <div className={styles.infoText}>
                     <h4>Items</h4>
                     <span className={styles.count}>
-                      {countNonBlankRows(dataFile1)}
+                      {countNonBlankRows(dataFile1, cblColumnMappings)}
                     </span>
                   </div>
                 </div>
@@ -93,7 +112,7 @@ function MatchableComponent({
                   fileType={1}
                   partialMatches={dataFile1}
                   setPartialMatchesSetter={setMatchesFile1}
-                  setSelectedRowData={setSelectedRowData1}
+                  setSelectedRowData={setSelectedRowCBL}
                   onSumChange={setSum1}
                   cblColumnMappings={cblColumnMappings}
                   insuranceColumnMappings={insuranceColumnMappings}
@@ -117,7 +136,7 @@ function MatchableComponent({
                   <div className={styles.infoText}>
                     <h4>Items</h4>
                     <span className={styles.count}>
-                      {countNonBlankRows(dataFile2)}
+                      {countNonBlankRows(dataFile2, insuranceColumnMappings)}
                     </span>
                   </div>
                 </div>
@@ -140,7 +159,7 @@ function MatchableComponent({
                   fileType={2}
                   partialMatches={dataFile2}
                   setPartialMatchesSetter={setMatchesFile2}
-                  setSelectedRowData={setSelectedRowData2}
+                  setSelectedRowData={setSelectedRowInsurer}
                   onSumChange={setSum2}
                   cblColumnMappings={cblColumnMappings}
                   insuranceColumnMappings={insuranceColumnMappings}

@@ -5,6 +5,7 @@ import { SaveRegular } from "@fluentui/react-icons";
 import { cleanData } from "../../../lib/cleanData";
 import { useSpContext } from "../../../SpContext";
 import { useChanges } from "../../../context/ChangesContext";
+import { useReconciliation } from "../../../context/ReconciliationContext";
 import {
   Button,
   Spinner,
@@ -14,30 +15,39 @@ import {
   useToastController,
   ToastBody,
 } from "@fluentui/react-components";
+import { addPostfix, mergeData } from "../../../lib/filterData";
 
-type SaveChangesProps = {
-  exactMatchCBL: any[];
-  exactMatchInsurer: any[];
-  partialMatchCBL: any[];
-  partialMatchInsurer: any[];
-  noMatchCBL: any[];
-  noMatchInsurer: any[];
-};
+type SaveChangesProps = {};
 
-function SaveChanges({
-  exactMatchCBL,
-  exactMatchInsurer,
-  partialMatchCBL,
-  partialMatchInsurer,
-  noMatchCBL,
-  noMatchInsurer,
-}: SaveChangesProps) {
+function SaveChanges({}: SaveChangesProps) {
   const { context, sp } = useSpContext();
   const { changes, setChanges } = useChanges();
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const {
+    exactMatchCBL,
+    exactMatchInsurer,
+    partialMatchCBL,
+    partialMatchInsurer,
+    noMatchCBL,
+    noMatchInsurer,
+    exactMatchSum1,
+    exactMatchSum2,
+    partialMatchSum1,
+    partialMatchSum2,
+    noMatchSum1,
+    noMatchSum2,
+  } = useReconciliation();
 
   const toasterId = useId("toaster");
   const { dispatchToast } = useToastController(toasterId);
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const insuranceName = urlParams.get("Insurance");
+  const date = urlParams.get("Date");
+
+  const mergedExactMatch = mergeData(exactMatchCBL, exactMatchInsurer);
+  const mergedPartialMatch = mergeData(partialMatchCBL, partialMatchInsurer);
+  const addPostfixNoMatchInsurer = addPostfix(noMatchInsurer);
   return (
     <Button
       icon={isSaving ? <Spinner size="tiny" /> : <SaveRegular fontSize={24} />}
@@ -50,11 +60,18 @@ function SaveChanges({
         setIsSaving(true);
         const res = await saveExcel(
           sp,
-          cleanData(exactMatchCBL, exactMatchInsurer),
-          cleanData(partialMatchCBL, partialMatchInsurer),
-          cleanData(noMatchCBL, noMatchInsurer),
-          cleanData(noMatchInsurer, noMatchCBL),
-          `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/CBL_SWAN_17_APR_25`
+          mergedExactMatch,
+          mergedPartialMatch,
+          noMatchCBL,
+          addPostfixNoMatchInsurer,
+          exactMatchSum1,
+          exactMatchSum2,
+          partialMatchSum1,
+          partialMatchSum2,
+          noMatchSum1,
+          noMatchSum2,
+          insuranceName || "",
+          `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/${insuranceName}/${date}`
         );
         if (res.status === 200) {
           dispatchToast(
