@@ -6,14 +6,14 @@ import {
 } from "@fluentui/react-icons";
 import { Input } from "@fluentui/react-components";
 import styles from "./Reconciliation.module.scss";
-import { countNonBlankRows } from "../../../lib/utils";
+import { countNonBlankRows, formatAmount } from "../../../lib/utils";
 import MatchableDataTable from "./MatchableDataTable";
 import { useReconciliation } from "../../../context/ReconciliationContext";
 
 type MatchableComponentProps = {
   insuranceName: string;
   title?: string;
-  type: "partial" | "no-match";
+  type: "partial" | "no-match" | "exact";
 };
 
 function MatchableComponent({
@@ -22,6 +22,10 @@ function MatchableComponent({
   type,
 }: MatchableComponentProps) {
   const {
+    exactMatchCBL,
+    setExactMatchCBL,
+    exactMatchInsurer,
+    setExactMatchInsurer,
     partialMatchCBL,
     setPartialMatchCBL,
     partialMatchInsurer,
@@ -30,6 +34,10 @@ function MatchableComponent({
     setNoMatchCBL,
     noMatchInsurer,
     setNoMatchInsurer,
+    exactMatchSum1,
+    setExactMatchSum1,
+    exactMatchSum2,
+    setExactMatchSum2,
     partialMatchSum1,
     setPartialMatchSum1,
     partialMatchSum2,
@@ -38,6 +46,10 @@ function MatchableComponent({
     setNoMatchSum1,
     noMatchSum2,
     setNoMatchSum2,
+    exactMatchSearch1,
+    setExactMatchSearch1,
+    exactMatchSearch2,
+    setExactMatchSearch2,
     partialMatchSearch1,
     setPartialMatchSearch1,
     partialMatchSearch2,
@@ -53,26 +65,91 @@ function MatchableComponent({
   } = useReconciliation();
 
   // Determine which data to use based on type
-  const dataFile1 = type === "partial" ? partialMatchCBL : noMatchCBL;
-  const dataFile2 = type === "partial" ? partialMatchInsurer : noMatchInsurer;
-  const sum1 = type === "partial" ? partialMatchSum1 : noMatchSum1;
-  const sum2 = type === "partial" ? partialMatchSum2 : noMatchSum2;
-  const search1 = type === "partial" ? partialMatchSearch1 : noMatchSearch1;
-  const search2 = type === "partial" ? partialMatchSearch2 : noMatchSearch2;
+  const dataFile1 =
+    type === "exact"
+      ? exactMatchCBL
+      : type === "partial"
+      ? partialMatchCBL
+      : noMatchCBL;
+  const dataFile2 =
+    type === "exact"
+      ? exactMatchInsurer
+      : type === "partial"
+      ? partialMatchInsurer
+      : noMatchInsurer;
+  const sum1 =
+    type === "exact"
+      ? exactMatchSum1
+      : type === "partial"
+      ? partialMatchSum1
+      : noMatchSum1;
+  const sum2 =
+    type === "exact"
+      ? exactMatchSum2
+      : type === "partial"
+      ? partialMatchSum2
+      : noMatchSum2;
+  const search1 =
+    type === "exact"
+      ? exactMatchSearch1
+      : type === "partial"
+      ? partialMatchSearch1
+      : noMatchSearch1;
+  const search2 =
+    type === "exact"
+      ? exactMatchSearch2
+      : type === "partial"
+      ? partialMatchSearch2
+      : noMatchSearch2;
   const setSearch1 =
-    type === "partial" ? setPartialMatchSearch1 : setNoMatchSearch1;
+    type === "exact"
+      ? setExactMatchSearch1
+      : type === "partial"
+      ? setPartialMatchSearch1
+      : setNoMatchSearch1;
   const setSearch2 =
-    type === "partial" ? setPartialMatchSearch2 : setNoMatchSearch2;
-  const setSum1 = type === "partial" ? setPartialMatchSum1 : setNoMatchSum1;
-  const setSum2 = type === "partial" ? setPartialMatchSum2 : setNoMatchSum2;
+    type === "exact"
+      ? setExactMatchSearch2
+      : type === "partial"
+      ? setPartialMatchSearch2
+      : setNoMatchSearch2;
+  const setSum1 =
+    type === "exact"
+      ? setExactMatchSum1
+      : type === "partial"
+      ? setPartialMatchSum1
+      : setNoMatchSum1;
+  const setSum2 =
+    type === "exact"
+      ? setExactMatchSum2
+      : type === "partial"
+      ? setPartialMatchSum2
+      : setNoMatchSum2;
   const setMatchesFile1 =
-    type === "partial" ? setPartialMatchCBL : setNoMatchCBL;
+    type === "exact"
+      ? setExactMatchCBL
+      : type === "partial"
+      ? setPartialMatchCBL
+      : setNoMatchCBL;
   const setMatchesFile2 =
-    type === "partial" ? setPartialMatchInsurer : setNoMatchInsurer;
+    type === "exact"
+      ? setExactMatchInsurer
+      : type === "partial"
+      ? setPartialMatchInsurer
+      : setNoMatchInsurer;
   return (
     <>
       <div>
-        <h5>{title ? title : ""}</h5>
+        <div style={{ marginBottom: "1.5rem" }}>
+          <h5>{title ? title : ""}</h5>
+          <span
+            style={{
+              color: sum1 + sum2 < 0 ? "red" : "green",
+            }}
+          >
+            Rs {formatAmount(sum1 + sum2)}
+          </span>
+        </div>
         <div className={styles.reconciliationContainer}>
           <div className={styles.cardWrapper}>
             <div className={styles.infoCard}>
@@ -81,7 +158,9 @@ function MatchableComponent({
                   <MoneyRegular className={styles.icon} />
                   <div className={styles.infoText}>
                     <h4>Total Amount</h4>
-                    <span className={styles.amount}>{sum1.toFixed(2)}</span>
+                    <span className={styles.amount}>
+                      Rs {formatAmount(sum1)}
+                    </span>
                   </div>
                 </div>
                 <div className={styles.infoRow}>
@@ -97,7 +176,7 @@ function MatchableComponent({
             </div>
             <div className={styles.card}>
               <div className={styles.cardHeader}>
-                <h3>CBL</h3>
+                <h3>FRCI</h3>
                 <Input
                   type="text"
                   placeholder="Search..."
@@ -128,7 +207,9 @@ function MatchableComponent({
                   <MoneyRegular className={styles.icon} />
                   <div className={styles.infoText}>
                     <h4>Total Amount</h4>
-                    <span className={styles.amount}>{sum2.toFixed(2)}</span>
+                    <span className={styles.amount}>
+                      Rs {formatAmount(sum2)}
+                    </span>
                   </div>
                 </div>
                 <div className={styles.infoRow}>

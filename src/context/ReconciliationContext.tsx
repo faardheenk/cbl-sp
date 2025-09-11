@@ -40,6 +40,10 @@ interface ReconciliationContextType {
   exactMatchSum2: number;
   setExactMatchSum2: React.Dispatch<React.SetStateAction<number>>;
 
+  // Matrix
+  matrix: any[];
+  setMatrix: React.Dispatch<React.SetStateAction<any[]>>;
+
   // UI states
   isClicked: boolean;
   setIsClicked: React.Dispatch<React.SetStateAction<boolean>>;
@@ -95,6 +99,9 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
   // No match states
   const [noMatchCBL, setNoMatchCBL] = useState<any[]>([]);
   const [noMatchInsurer, setNoMatchInsurer] = useState<any[]>([]);
+
+  // Matrix
+  const [matrix, setMatrix] = useState<any[]>([]);
 
   // Sum states
   const [partialMatchSum1, setPartialMatchSum1] = useState<number>(0);
@@ -176,6 +183,10 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
         setExactMatchSum1,
         exactMatchSum2,
         setExactMatchSum2,
+
+        // Matrix
+        matrix,
+        setMatrix,
 
         // UI states
         isClicked,

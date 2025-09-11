@@ -21,6 +21,7 @@
     "@microsoft/sp-property-pane": "1.20.0",
     "@microsoft/sp-webpart-base": "1.20.0",
     "@pnp/sp": "^4.12.0",
+    "antd": "^5.27.3",
     "bootstrap": "^5.3.5",
     "bootstrap-icons": "^1.11.3",
     "react": "17.0.1",

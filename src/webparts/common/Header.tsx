@@ -5,6 +5,7 @@ import {
   ArrowUploadRegular,
   ArrowDownloadRegular,
   HomeRegular,
+  AddRegular,
 } from "@fluentui/react-icons";
 import styles from "./Header.module.scss";
 import UploadModal from "./UploadModal";
@@ -87,12 +88,12 @@ const Header: React.FC = () => {
         <Col>
           <a href={context.pageContext.web.absoluteUrl}>
             <Image
-              src={require("../assets/city-broker.png")}
+              src={require("../assets/frci_logo.png")}
               alt="logo"
               fluid
               style={{
-                width: "15%",
-                minWidth: "120px",
+                width: "10%",
+                minWidth: "100px",
               }}
             />
           </a>
@@ -119,14 +120,29 @@ const Header: React.FC = () => {
               </Button>
             </div>
           ) : (
-            <Button
-              onClick={handleOpen}
-              appearance="primary"
-              className={styles.actionButton}
-              icon={<ArrowUploadRegular />}
-            >
-              Upload Statements
-            </Button>
+            <div className="d-flex gap-2 justify-content-end">
+              <Button
+                appearance="primary"
+                className={styles.actionButton}
+                icon={<AddRegular />}
+                onClick={() => {
+                  window.open(
+                    `${context.pageContext.web.absoluteUrl}/SitePages/Onboarding Insurance.aspx`,
+                    "_blank"
+                  );
+                }}
+              >
+                Onboard New Insurance
+              </Button>
+              <Button
+                onClick={handleOpen}
+                appearance="primary"
+                className={styles.actionButton}
+                icon={<ArrowUploadRegular />}
+              >
+                Upload Statements
+              </Button>
+            </div>
           )}
         </Col>
       </Row>
@@ -134,7 +150,7 @@ const Header: React.FC = () => {
       <UploadModal
         show={showModal}
         onClose={handleClose}
-        insuranceOptions={insuranceOptions}
+        // insuranceOptions={insuranceOptions}
       />
     </>
   );

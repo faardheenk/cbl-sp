@@ -10,7 +10,6 @@
         }
       ]
     },
-
     "landing-web-part": {
       "components": [
         {
@@ -18,12 +17,20 @@
           "manifest": "./src/webparts/landing/LandingWebPart.manifest.json"
         }
       ]
+    },
+    "onboarding-insurance-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/onboardingInsurance/OnboardingInsuranceWebPart.js",
+          "manifest": "./src/webparts/onboardingInsurance/OnboardingInsuranceWebPart.manifest.json"
+        }
+      ]
     }
   },
   "externals": {},
   "localizedResources": {
     "ReconciliationWebPartStrings": "lib/webparts/reconciliation/loc/{locale}.js",
-    "DashboardWebPartStrings": "lib/webparts/dashboard/loc/{locale}.js",
-    "LandingWebPartStrings": "lib/webparts/landing/loc/{locale}.js"
+    "LandingWebPartStrings": "lib/webparts/landing/loc/{locale}.js",
+    "OnboardingInsuranceWebPartStrings": "lib/webparts/onboardingInsurance/loc/{locale}.js"
   }
 }

@@ -25,6 +25,25 @@ function MatchableDataTable({
   filterText,
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  const [previousDataLength, setPreviousDataLength] = useState<number>(
+    partialMatches.length
+  );
+
+  // Clear selected rows when data length decreases (indicating rows were removed)
+  useEffect(() => {
+    if (partialMatches.length < previousDataLength) {
+      console.log(
+        `Data length decreased from ${previousDataLength} to ${partialMatches.length}, clearing selections`
+      );
+      setSelectedRows([]);
+      // Also clear the global selected row data
+      if (setSelectedRowData) {
+        setSelectedRowData([]);
+      }
+    }
+    setPreviousDataLength(partialMatches.length);
+  }, [partialMatches.length, previousDataLength, setSelectedRowData]);
+
   // console.log("cblColumnMappings", cblColumnMappings);
   // Calculate sum whenever selectedRows changes
   useEffect(() => {
@@ -65,7 +84,11 @@ function MatchableDataTable({
 
   const handleRowClicked = (row: any) => {
     // Check if the row is empty (all values are empty strings)
-    const isEmptyRow = Object.values(row).every((value) => value === "");
+    // const isEmptyRow = Object.values(row).every((value) => value === "");
+    const isEmptyRow = row.Amount === "";
+
+    console.log("row clicked >>> ", row);
+    console.log("current selectedRows >>> ", selectedRows);
 
     // If the row is empty, don't allow selection
     if (isEmptyRow) {
@@ -74,11 +97,11 @@ function MatchableDataTable({
 
     // Toggle selection
     setSelectedRows((prev) => {
-      if (prev.includes(row.idx)) {
-        return prev.filter((id) => id !== row.idx);
-      } else {
-        return [...prev, row.idx];
-      }
+      const newSelection = prev.includes(row.idx)
+        ? prev.filter((id) => id !== row.idx)
+        : [...prev, row.idx];
+      console.log("new selection >>> ", newSelection);
+      return newSelection;
     });
 
     if (setSelectedRowData) {
@@ -94,7 +117,13 @@ function MatchableDataTable({
 
   const conditionalRowStyles = [
     {
-      when: (row: any) => selectedRows.includes(row.idx),
+      when: (row: any) => {
+        const isSelected = selectedRows.includes(row.idx);
+        if (isSelected) {
+          console.log(`Row ${row.idx} is highlighted as selected`);
+        }
+        return isSelected;
+      },
       style: {
         backgroundColor: "rgba(68, 129, 221, 0.1)",
         userSelect: "none" as const,

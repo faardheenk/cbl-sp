@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal, Form, Button, Row, Col } from "react-bootstrap";
 import styles from "./UploadModal.module.scss";
 import { uploadExcelFiles } from "../../lib/uploadFiles";
@@ -17,8 +17,7 @@ import {
 interface UploadModalProps {
   show: boolean;
   onClose: () => void;
-
-  insuranceOptions: string[];
+  // insuranceOptions: string[];
   file1Label?: string;
   file2Label?: string;
 }
@@ -26,26 +25,41 @@ interface UploadModalProps {
 const UploadModal: React.FC<UploadModalProps> = ({
   show,
   onClose,
-  insuranceOptions,
-  file1Label = "CBL", // to change to CBL
+  file1Label = "FRCI", // to change to CBL
   file2Label,
 }) => {
   const [file1, setFile1] = useState<File | null>(null);
   const [file2, setFile2] = useState<File | null>(null);
-  const [selectedInsurance, setSelectedInsurance] = useState(
-    insuranceOptions[0]
-  );
+
   const [showLoader, setShowLoader] = useState(false);
 
   const { context, sp } = useSpContext();
   const { tasks, setTasks } = useTasks();
   const toasterId = useId("toaster");
   const { dispatchToast } = useToastController(toasterId);
+  const [insuranceNames, setInsuranceNames] = useState<string[]>([]);
+  const [selectedInsurance, setSelectedInsurance] = useState("");
+
+  const fetchInsuranceNames = async () => {
+    const data = await sp.web.lists
+      .getByTitle("Mappings")
+      .items.select("Title")
+      .filter("Title ne 'CBL'")();
+
+    const insuranceNames = data.map(({ Title }: { Title: string }) => Title);
+
+    setInsuranceNames(insuranceNames);
+    setSelectedInsurance(insuranceNames[0]);
+  };
+
+  useEffect(() => {
+    fetchInsuranceNames();
+  }, []);
 
   const handleClose = () => {
     setFile1(null);
     setFile2(null);
-    setSelectedInsurance(insuranceOptions[0]);
+    setSelectedInsurance("");
     setShowLoader(false);
     onClose();
   };
@@ -65,6 +79,8 @@ const UploadModal: React.FC<UploadModalProps> = ({
         month: "long",
         year: "numeric",
       });
+
+      console.log("Selected insurance:", selectedInsurance);
 
       // Base folder path
       const baseFolderPath = `${
@@ -114,7 +130,7 @@ const UploadModal: React.FC<UploadModalProps> = ({
         ...prev,
         {
           date: formattedDate,
-          insurance: selectedInsurance.toUpperCase(),
+          insurance: selectedInsurance,
           status: "Pending",
           url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx?Insurance=${selectedInsurance}`,
         },
@@ -169,7 +185,7 @@ const UploadModal: React.FC<UploadModalProps> = ({
                 value={selectedInsurance}
                 onChange={(e) => setSelectedInsurance(e.target.value)}
               >
-                {insuranceOptions.map((option) => (
+                {insuranceNames.map((option) => (
                   <option key={option} value={option}>
                     {option}
                   </option>

@@ -17,6 +17,10 @@
     margin: 0 !important;
   }
 
+  [data-automation-id="contentScrollRegion"] {
+    overflow-y: auto !important;
+  }
+
   [data-automation-id="CanvasZone-SectionContainer"] {
     max-width: 100% !important;
   }
@@ -25,7 +29,7 @@
     padding: 0 !important;
   }
 
-  [data-automation-id="SimpleFooter"] {
+  [data-automationid="SimpleFooter"] {
     display: none !important;
   }
 }

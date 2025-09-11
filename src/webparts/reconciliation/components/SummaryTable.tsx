@@ -34,7 +34,7 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
           <div className={styles.summaryTableRow}>
             <div className={styles.summaryTableSection}>
               <div className={styles.summaryTableSectionHeader}>
-                <h5>CBL</h5>
+                <h5>FRCI</h5>
               </div>
               <div className={styles.summaryTableGrid}>
                 <div

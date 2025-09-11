@@ -69,14 +69,40 @@ function Datatable({
     },
   ];
 
+  const columnsToExclude = [
+    "matched_insurer_indices",
+    "Placing No.",
+    "PlacingNo_Clean",
+    "Amount_Clean",
+    "match_status",
+    "match_pass",
+    "matched_amtdue_total",
+    "partial_candidates_indices",
+    "match_resolved_in_pass",
+    "partial_resolved_in_pass",
+    "string matching_INSURER",
+    "PlacingNo_Clean_INSURER",
+    "PolicyNo_1_Clean_INSURER",
+    "PolicyNo_2_Clean_INSURER",
+    "Amount_Clean_INSURER",
+    "string matching",
+    "PolicyNo_1_Clean",
+    "PolicyNo_2_Clean",
+    "PolicyNo_Clean",
+    "MatrixKey",
+  ];
+
   const columns: TableColumn<any>[] = data.length
     ? Object.keys(data[0])
-        .filter((key) => key !== "idx")
+        // .filter((key) => key !== "idx")
+        .filter((key) => !columnsToExclude.includes(key) && key !== "idx")
         .map((key) => ({
+          reorder: true,
           name: key,
           selector: (row) => row[key],
           cell: (row) => {
             // Style for placing no partial matches
+
             const isPlacingNoPartial =
               row.match_condition === "placing no partial";
             const shouldHighlight =
@@ -123,6 +149,7 @@ function Datatable({
     <>
       {data.length > 0 ? (
         <DataTable
+          onColumnOrderChange={(cols) => {}}
           columns={columns}
           data={filteredItems}
           pagination
