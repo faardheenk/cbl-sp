@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import { ColumnMappingType } from "../typings";
+import { ColumnsType } from "antd/es/table";
 
 interface ReconciliationContextType {
   // Exact match states
@@ -69,12 +69,14 @@ interface ReconciliationContextType {
   setExactMatchSearch2: React.Dispatch<React.SetStateAction<string>>;
 
   // Column mapping states
-  cblColumnMappings: ColumnMappingType;
-  setCblColumnMappings: React.Dispatch<React.SetStateAction<ColumnMappingType>>;
-  insuranceColumnMappings: ColumnMappingType;
-  setInsuranceColumnMappings: React.Dispatch<
-    React.SetStateAction<ColumnMappingType>
-  >;
+  cblColumns: ColumnsType;
+  setCblColumns: React.Dispatch<React.SetStateAction<ColumnsType>>;
+  insurerColumns: ColumnsType;
+  setInsurerColumns: React.Dispatch<React.SetStateAction<ColumnsType>>;
+
+  // Clear selections trigger
+  clearAllSelections: boolean;
+  setClearAllSelections: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const ReconciliationContext = createContext<
@@ -127,21 +129,11 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
   const [exactMatchSearch2, setExactMatchSearch2] = useState<string>("");
 
   // Column mapping states
-  const [cblColumnMappings, setCblColumnMappings] = useState<ColumnMappingType>(
-    {
-      policyNo: "",
-      placingNo: "",
-      clientName: "",
-      amount: "",
-    }
-  );
-  const [insuranceColumnMappings, setInsuranceColumnMappings] =
-    useState<ColumnMappingType>({
-      policyNo: "",
-      placingNo: "",
-      clientName: "",
-      amount: "",
-    });
+  const [cblColumns, setCblColumns] = useState<ColumnsType>([]);
+  const [insurerColumns, setInsurerColumns] = useState<ColumnsType>([]);
+
+  // Clear selections trigger
+  const [clearAllSelections, setClearAllSelections] = useState<boolean>(false);
 
   return (
     <ReconciliationContext.Provider
@@ -213,10 +205,14 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
         setExactMatchSearch2,
 
         // Column mapping states
-        cblColumnMappings,
-        setCblColumnMappings,
-        insuranceColumnMappings,
-        setInsuranceColumnMappings,
+        cblColumns,
+        setCblColumns,
+        insurerColumns,
+        setInsurerColumns,
+
+        // Clear selections trigger
+        clearAllSelections,
+        setClearAllSelections,
       }}
     >
       {children}

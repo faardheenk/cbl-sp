@@ -25,7 +25,7 @@ interface UploadModalProps {
 const UploadModal: React.FC<UploadModalProps> = ({
   show,
   onClose,
-  file1Label = "FRCI", // to change to CBL
+  file1Label = "CBL", // to change to CBL
   file2Label,
 }) => {
   const [file1, setFile1] = useState<File | null>(null);
@@ -240,9 +240,9 @@ const UploadModal: React.FC<UploadModalProps> = ({
               <Button
                 type="button"
                 disabled={!file1 || !file2}
-                onClick={() => {
+                onClick={async () => {
                   setShowLoader(true);
-                  handleUpload(file1, file2, selectedInsurance);
+                  await handleUpload(file1, file2, selectedInsurance);
                   handleClose();
                 }}
                 className={styles.uploadButton}

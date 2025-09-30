@@ -1,10 +1,5 @@
-import React from "react";
-import {
-  MoneyRegular,
-  DocumentRegular,
-  SearchRegular,
-} from "@fluentui/react-icons";
-import { Input } from "@fluentui/react-components";
+import React, { useState, useEffect } from "react";
+import { MoneyRegular, DocumentRegular } from "@fluentui/react-icons";
 import styles from "./Reconciliation.module.scss";
 import { countNonBlankRows, formatAmount } from "../../../lib/utils";
 import MatchableDataTable from "./MatchableDataTable";
@@ -13,13 +8,15 @@ import { useReconciliation } from "../../../context/ReconciliationContext";
 type MatchableComponentProps = {
   insuranceName: string;
   title?: string;
-  type: "partial" | "no-match" | "exact";
+  type: "exact" | "partial" | "no-match";
+  clearSelections?: boolean;
 };
 
 function MatchableComponent({
   insuranceName,
   title,
   type,
+  clearSelections = false,
 }: MatchableComponentProps) {
   const {
     exactMatchCBL,
@@ -46,22 +43,11 @@ function MatchableComponent({
     setNoMatchSum1,
     noMatchSum2,
     setNoMatchSum2,
-    exactMatchSearch1,
-    setExactMatchSearch1,
-    exactMatchSearch2,
-    setExactMatchSearch2,
-    partialMatchSearch1,
-    setPartialMatchSearch1,
-    partialMatchSearch2,
-    setPartialMatchSearch2,
-    noMatchSearch1,
-    setNoMatchSearch1,
-    noMatchSearch2,
-    setNoMatchSearch2,
     setSelectedRowCBL,
     setSelectedRowInsurer,
-    cblColumnMappings,
-    insuranceColumnMappings,
+    cblColumns,
+    insurerColumns,
+    clearAllSelections,
   } = useReconciliation();
 
   // Determine which data to use based on type
@@ -89,30 +75,7 @@ function MatchableComponent({
       : type === "partial"
       ? partialMatchSum2
       : noMatchSum2;
-  const search1 =
-    type === "exact"
-      ? exactMatchSearch1
-      : type === "partial"
-      ? partialMatchSearch1
-      : noMatchSearch1;
-  const search2 =
-    type === "exact"
-      ? exactMatchSearch2
-      : type === "partial"
-      ? partialMatchSearch2
-      : noMatchSearch2;
-  const setSearch1 =
-    type === "exact"
-      ? setExactMatchSearch1
-      : type === "partial"
-      ? setPartialMatchSearch1
-      : setNoMatchSearch1;
-  const setSearch2 =
-    type === "exact"
-      ? setExactMatchSearch2
-      : type === "partial"
-      ? setPartialMatchSearch2
-      : setNoMatchSearch2;
+
   const setSum1 =
     type === "exact"
       ? setExactMatchSum1
@@ -137,6 +100,117 @@ function MatchableComponent({
       : type === "partial"
       ? setPartialMatchInsurer
       : setNoMatchInsurer;
+
+  // State to manage cross-table row selection
+  const [autoSelectedInsurerRows, setAutoSelectedInsurerRows] = useState<
+    string[]
+  >([]);
+
+  // Track which CBL rows are selected and their corresponding Insurer mappings
+  const [cblSelectionMappings, setCblSelectionMappings] = useState<
+    Map<string, string[]>
+  >(new Map());
+
+  // Clear cross-table selections when clearSelections prop is true
+  useEffect(() => {
+    if (clearSelections || clearAllSelections) {
+      console.log(
+        `Force clearing cross-table selections in MatchableComponent (type: ${type})`
+      );
+      console.log(
+        "Before clearing - autoSelectedInsurerRows:",
+        autoSelectedInsurerRows
+      );
+      console.log(
+        "Before clearing - cblSelectionMappings:",
+        Array.from(cblSelectionMappings.entries())
+      );
+
+      setAutoSelectedInsurerRows([]);
+      setCblSelectionMappings(new Map());
+
+      console.log("After clearing - forced cross-table selections to empty");
+    }
+  }, [
+    clearSelections,
+    clearAllSelections,
+    type,
+    autoSelectedInsurerRows,
+    cblSelectionMappings,
+  ]);
+
+  // Handler for automatic row selection
+  const handleRowSelection = (
+    selectedRowIndices: string[],
+    sourceFileType: 1 | 2,
+    sourceRowId?: string,
+    isDeselection?: boolean
+  ) => {
+    console.log("Cross-table selection triggered:", {
+      selectedRowIndices,
+      sourceFileType,
+      sourceRowId,
+      isDeselection,
+      currentAutoSelected: autoSelectedInsurerRows,
+      currentMappings: Array.from(cblSelectionMappings.entries()),
+    });
+
+    if (sourceFileType === 1 && sourceRowId) {
+      const newMappings = new Map(cblSelectionMappings);
+
+      if (isDeselection) {
+        // Remove this CBL row's mapping
+        console.log(
+          `CBL row ${sourceRowId} deselected - removing its Insurer mappings`
+        );
+        newMappings.delete(sourceRowId);
+      } else {
+        // Add/update this CBL row's mapping
+        console.log(
+          `CBL row ${sourceRowId} selected - adding Insurer mappings:`,
+          selectedRowIndices
+        );
+        newMappings.set(sourceRowId, selectedRowIndices);
+      }
+
+      // Update the mappings
+      setCblSelectionMappings(newMappings);
+
+      // Calculate all auto-selected Insurer rows from all CBL selections
+      const allAutoSelectedRows: string[] = [];
+      newMappings.forEach((insurerRows) => {
+        allAutoSelectedRows.push(...insurerRows);
+      });
+
+      // Remove duplicates
+      const uniqueAutoSelectedRows = Array.from(new Set(allAutoSelectedRows));
+
+      console.log(
+        "Updated auto-selected Insurer rows:",
+        uniqueAutoSelectedRows
+      );
+      setAutoSelectedInsurerRows(uniqueAutoSelectedRows);
+    }
+  };
+
+  // Handler for when Insurer table rows are manually toggled
+  const handleInsurerRowSelection = (
+    selectedRowIndices: string[],
+    sourceFileType: 1 | 2,
+    sourceRowId?: string,
+    isDeselection?: boolean
+  ) => {
+    console.log("Insurer table manual selection:", {
+      selectedRowIndices,
+      sourceFileType,
+      sourceRowId,
+      isDeselection,
+    });
+
+    // If user manually deselects auto-selected rows, we might want to handle this
+    // For now, we'll allow the manual override without affecting CBL selection
+  };
+
   return (
     <>
       <div>
@@ -168,7 +242,7 @@ function MatchableComponent({
                   <div className={styles.infoText}>
                     <h4>Items</h4>
                     <span className={styles.count}>
-                      {countNonBlankRows(dataFile1, cblColumnMappings)}
+                      {countNonBlankRows(dataFile1)}
                     </span>
                   </div>
                 </div>
@@ -176,26 +250,18 @@ function MatchableComponent({
             </div>
             <div className={styles.card}>
               <div className={styles.cardHeader}>
-                <h3>FRCI</h3>
-                <Input
-                  type="text"
-                  placeholder="Search..."
-                  value={search1}
-                  onChange={(e) => setSearch1(e.target.value)}
-                  contentBefore={<SearchRegular />}
-                  style={{ width: "200px" }}
-                />
+                <h3>CBL</h3>
               </div>
               <div className={styles.cardBody}>
                 <MatchableDataTable
                   fileType={1}
-                  partialMatches={dataFile1}
+                  data={dataFile1}
                   setPartialMatchesSetter={setMatchesFile1}
                   setSelectedRowData={setSelectedRowCBL}
                   onSumChange={setSum1}
-                  cblColumnMappings={cblColumnMappings}
-                  insuranceColumnMappings={insuranceColumnMappings}
-                  filterText={search1}
+                  columns={cblColumns}
+                  onRowSelection={handleRowSelection}
+                  clearSelections={clearSelections || clearAllSelections}
                 />
               </div>
             </div>
@@ -217,7 +283,7 @@ function MatchableComponent({
                   <div className={styles.infoText}>
                     <h4>Items</h4>
                     <span className={styles.count}>
-                      {countNonBlankRows(dataFile2, insuranceColumnMappings)}
+                      {countNonBlankRows(dataFile2)}
                     </span>
                   </div>
                 </div>
@@ -226,25 +292,18 @@ function MatchableComponent({
             <div className={styles.card}>
               <div className={styles.cardHeader}>
                 <h3>{insuranceName}</h3>
-                <Input
-                  type="text"
-                  placeholder="Search..."
-                  value={search2}
-                  onChange={(e) => setSearch2(e.target.value)}
-                  contentBefore={<SearchRegular />}
-                  style={{ width: "200px" }}
-                />
               </div>
               <div className={styles.cardBody}>
                 <MatchableDataTable
                   fileType={2}
-                  partialMatches={dataFile2}
+                  data={dataFile2}
                   setPartialMatchesSetter={setMatchesFile2}
                   setSelectedRowData={setSelectedRowInsurer}
                   onSumChange={setSum2}
-                  cblColumnMappings={cblColumnMappings}
-                  insuranceColumnMappings={insuranceColumnMappings}
-                  filterText={search2}
+                  columns={insurerColumns}
+                  externalSelectedRows={autoSelectedInsurerRows}
+                  onRowSelection={handleInsurerRowSelection}
+                  clearSelections={clearSelections || clearAllSelections}
                 />
               </div>
             </div>

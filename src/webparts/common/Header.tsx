@@ -88,12 +88,12 @@ const Header: React.FC = () => {
         <Col>
           <a href={context.pageContext.web.absoluteUrl}>
             <Image
-              src={require("../assets/frci_logo.png")}
+              src={require("../assets/city-broker.png")}
               alt="logo"
               fluid
               style={{
                 width: "10%",
-                minWidth: "100px",
+                minWidth: "120px",
               }}
             />
           </a>

@@ -51,17 +51,27 @@ function Reconciliation() {
     setNoMatchSum2,
     setExactMatchSum1,
     setExactMatchSum2,
-    cblColumnMappings,
-    setCblColumnMappings,
-    insuranceColumnMappings,
-    setInsuranceColumnMappings,
+    setCblColumns,
+    setInsurerColumns,
     matrix,
     setMatrix,
+    clearAllSelections,
+    setClearAllSelections,
   } = useReconciliation();
 
   const urlParams = new URLSearchParams(window.location.search);
   const insuranceName = urlParams.get("Insurance");
   const date = urlParams.get("Date");
+
+  // Helper function to trigger clearing all selections
+  const triggerClearAllSelections = () => {
+    console.log("Triggering clear all selections");
+    setClearAllSelections(true);
+    // Reset the trigger after a brief delay to allow components to react
+    setTimeout(() => {
+      setClearAllSelections(false);
+    }, 100);
+  };
 
   const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/${insuranceName}/${date}/output.xlsx`;
   console.log("URL >>> ", url);
@@ -74,6 +84,7 @@ function Reconciliation() {
         partialMatchInsurer,
         noMatchCBL,
         noMatchInsurer,
+        columnNames,
       } = await fetchFile(url, sp);
       setExactMatchCBL(exactMatchCBL);
       setExactMatchInsurer(exactMatchInsurer);
@@ -81,29 +92,25 @@ function Reconciliation() {
       setPartialMatchInsurer(partialMatchInsurer);
       setNoMatchCBL(noMatchCBL);
       setNoMatchInsurer(noMatchInsurer);
-      const { sum1, sum2 } = calculateSum(
-        exactMatchCBL,
-        exactMatchInsurer,
-        cblColumnMappings,
-        insuranceColumnMappings
-      );
+
+      // console.log("columns names >>> ", columnNames);
+      setCblColumns(columnNames.cbl);
+      setInsurerColumns(columnNames.insurer);
+
+      const { sum1, sum2 } = calculateSum(exactMatchCBL, exactMatchInsurer);
       setExactMatchSum1(sum1);
       setExactMatchSum2(sum2);
 
       const { sum1: partialMatchSum1, sum2: partialMatchSum2 } = calculateSum(
         partialMatchCBL,
-        partialMatchInsurer,
-        cblColumnMappings,
-        insuranceColumnMappings
+        partialMatchInsurer
       );
       setPartialMatchSum1(partialMatchSum1);
       setPartialMatchSum2(partialMatchSum2);
 
       const { sum1: noMatchSum1, sum2: noMatchSum2 } = calculateSum(
         noMatchCBL,
-        noMatchInsurer,
-        cblColumnMappings,
-        insuranceColumnMappings
+        noMatchInsurer
       );
       setNoMatchSum1(noMatchSum1);
       setNoMatchSum2(noMatchSum2);
@@ -115,44 +122,31 @@ function Reconciliation() {
       const [{ ColumnMappings: cbl }]: [{ ColumnMappings: string }] =
         await columnMappings.items.filter(`Title eq 'CBL'`)();
 
-      setCblColumnMappings(JSON.parse(cbl));
-
       const [{ ColumnMappings: insuranceColumnMappings }]: [
         { ColumnMappings: string }
       ] = await columnMappings.items.filter(
         `Title eq '${insuranceName?.toUpperCase()}'`
       )();
-
-      setInsuranceColumnMappings(JSON.parse(insuranceColumnMappings));
     };
     fetchData();
     fetchColumnMappings();
   }, []);
 
   useEffect(() => {
-    const { sum1, sum2 } = calculateSum(
-      exactMatchCBL,
-      exactMatchInsurer,
-      cblColumnMappings,
-      insuranceColumnMappings
-    );
+    const { sum1, sum2 } = calculateSum(exactMatchCBL, exactMatchInsurer);
     setExactMatchSum1(sum1);
     setExactMatchSum2(sum2);
 
     const { sum1: partialMatchSum1, sum2: partialMatchSum2 } = calculateSum(
       partialMatchCBL,
-      partialMatchInsurer,
-      cblColumnMappings,
-      insuranceColumnMappings
+      partialMatchInsurer
     );
     setPartialMatchSum1(partialMatchSum1);
     setPartialMatchSum2(partialMatchSum2);
 
     const { sum1: noMatchSum1, sum2: noMatchSum2 } = calculateSum(
       noMatchCBL,
-      noMatchInsurer,
-      cblColumnMappings,
-      insuranceColumnMappings
+      noMatchInsurer
     );
     setNoMatchSum1(noMatchSum1);
     setNoMatchSum2(noMatchSum2);
@@ -163,8 +157,6 @@ function Reconciliation() {
     partialMatchInsurer,
     noMatchCBL,
     noMatchInsurer,
-    cblColumnMappings,
-    insuranceColumnMappings,
   ]);
 
   const handleMoveToPartialMatch = async () => {
@@ -266,6 +258,7 @@ function Reconciliation() {
 
       setSelectedRowCBL([]);
       setSelectedRowInsurer([]);
+      triggerClearAllSelections();
     }
   };
 
@@ -636,6 +629,7 @@ function Reconciliation() {
 
       setSelectedRowCBL([]);
       setSelectedRowInsurer([]);
+      triggerClearAllSelections();
     }
   };
 
@@ -768,6 +762,7 @@ function Reconciliation() {
 
       setSelectedRowCBL([]);
       setSelectedRowInsurer([]);
+      triggerClearAllSelections();
     }
   };
 
@@ -793,6 +788,7 @@ function Reconciliation() {
           title="Exact Matches"
           type="exact"
           insuranceName={insuranceName || ""}
+          clearSelections={clearAllSelections}
         />
 
         {/* Partial Matches Header */}
@@ -852,6 +848,7 @@ function Reconciliation() {
           title="Partial Matches"
           type="partial"
           insuranceName={insuranceName || ""}
+          clearSelections={clearAllSelections}
         />
 
         <div className={styles.partialHeader}>
@@ -885,6 +882,7 @@ function Reconciliation() {
           title="No Matches"
           type="no-match"
           insuranceName={insuranceName || ""}
+          clearSelections={clearAllSelections}
         />
       </div>
     </>

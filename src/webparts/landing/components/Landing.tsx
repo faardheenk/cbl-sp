@@ -7,7 +7,8 @@ import Header from "../../common/Header";
 import { useTasks } from "../../../context/TaskContext";
 import { useSpContext } from "../../../SpContext";
 import { IFolderInfo } from "@pnp/sp/folders";
-import DataTable, { TableColumn } from "react-data-table-component";
+
+import { Table, TableProps } from "antd";
 
 const COLORS = {
   primary: "#5A6374", // muted slate gray
@@ -33,32 +34,45 @@ const Landing = () => {
     });
   };
 
-  const columns: TableColumn<any>[] = [
+  type DataType = {
+    date: string;
+    insurance: string;
+    status: string;
+    url: string;
+  };
+
+  const columns: TableProps<DataType>["columns"] = [
     {
-      name: "Date",
-      selector: (row: any) => row.date,
+      title: "Date",
+      dataIndex: "date",
+      key: "date",
     },
     {
-      name: "Insurance",
-      selector: (row: any) => row.insurance,
+      title: "Insurance",
+      dataIndex: "insurance",
+      key: "insurance",
     },
 
     {
-      name: "Status",
-      cell: (row: any) => (
+      title: "Status",
+      dataIndex: "status",
+      render: (_, row: any) => (
         <Badge bg={badgeVariant(row.status)} style={{ padding: "0.5rem" }}>
           {row.status}
         </Badge>
       ),
+      key: "status",
     },
     {
-      name: "Action",
-      cell: (row: any) => (
+      title: "Action",
+      dataIndex: "url",
+      render: (_, row: any) => (
         <a href={row.url} target="_blank" rel="noopener noreferrer">
           View
         </a>
       ),
-      right: true,
+
+      key: "action",
     },
   ];
 
@@ -168,7 +182,7 @@ const Landing = () => {
         }}
       >
         <div style={{ overflowX: "auto", padding: "1rem" }}>
-          <DataTable columns={columns} data={tasks} pagination />
+          <Table columns={columns} dataSource={tasks} size="small"/>
         </div>
       </Card>
     </Container>

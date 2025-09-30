@@ -15,5 +15,6 @@ export type ColumnMappingType = {
   policyNo: string;
   placingNo: string;
   clientName: string;
-  amount: string;
+  // amount: string;
+  processedAmount: string;
 };

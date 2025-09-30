@@ -97,7 +97,8 @@ function Datatable({
         // .filter((key) => key !== "idx")
         .filter((key) => !columnsToExclude.includes(key) && key !== "idx")
         .map((key) => ({
-          reorder: true,
+          // reorder: true,
+          wrap: true,
           name: key,
           selector: (row) => row[key],
           cell: (row) => {

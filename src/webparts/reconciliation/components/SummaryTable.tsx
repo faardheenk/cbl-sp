@@ -21,8 +21,6 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
     partialMatchInsurer,
     noMatchCBL,
     noMatchInsurer,
-    cblColumnMappings,
-    insuranceColumnMappings,
   } = useReconciliation();
   return (
     <>
@@ -34,7 +32,7 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
           <div className={styles.summaryTableRow}>
             <div className={styles.summaryTableSection}>
               <div className={styles.summaryTableSectionHeader}>
-                <h5>FRCI</h5>
+                <h5>CBL</h5>
               </div>
               <div className={styles.summaryTableGrid}>
                 <div
@@ -57,8 +55,7 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(exactMatchCBL, cblColumnMappings)}{" "}
-                      lines
+                      {countNonBlankRows(exactMatchCBL)} lines
                     </span>
                   </div>
                 </div>
@@ -82,11 +79,7 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(
-                        partialMatchCBL,
-                        cblColumnMappings
-                      )}{" "}
-                      lines
+                      {countNonBlankRows(partialMatchCBL)} lines
                     </span>
                   </div>
                 </div>
@@ -110,7 +103,7 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(noMatchCBL, cblColumnMappings)} lines
+                      {countNonBlankRows(noMatchCBL)} lines
                     </span>
                   </div>
                 </div>
@@ -141,11 +134,7 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(
-                        exactMatchInsurer,
-                        insuranceColumnMappings
-                      )}{" "}
-                      lines
+                      {countNonBlankRows(exactMatchInsurer)} lines
                     </span>
                   </div>
                 </div>
@@ -169,11 +158,7 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(
-                        partialMatchInsurer,
-                        insuranceColumnMappings
-                      )}{" "}
-                      lines
+                      {countNonBlankRows(partialMatchInsurer)} lines
                     </span>
                   </div>
                 </div>
@@ -197,11 +182,7 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
                     </span>
                     <span className={styles.summaryTableSubValue}>
                       <DocumentRegular />
-                      {countNonBlankRows(
-                        noMatchInsurer,
-                        insuranceColumnMappings
-                      )}{" "}
-                      lines
+                      {countNonBlankRows(noMatchInsurer)} lines
                     </span>
                   </div>
                 </div>
