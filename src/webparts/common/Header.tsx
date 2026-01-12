@@ -10,10 +10,10 @@ import {
 import styles from "./Header.module.scss";
 import UploadModal from "./UploadModal";
 import { useSpContext } from "../../SpContext";
-import { uploadExcelFiles } from "../../lib/uploadFiles";
+import { uploadExcelFiles } from "../../utils/uploadFiles";
 import { useReconciliation } from "../../context/ReconciliationContext";
-import { mergeData } from "../../lib/filterData";
-import { exportReport } from "../../lib/exportReport";
+import { mergeData } from "../../utils/filterData";
+import { exportReport } from "../../utils/exportReport";
 import * as XLSX from "xlsx";
 
 const Header: React.FC = () => {

@@ -5,7 +5,8 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import { Table, Button, Tooltip, Input } from "antd";
+import { Table, Button, Tooltip, Input, Dropdown } from "antd";
+import type { MenuProps } from "antd";
 import { ColumnsType } from "antd/es/table";
 import { Resizable, ResizeCallbackData } from "react-resizable";
 import {
@@ -13,6 +14,7 @@ import {
   SearchOutlined,
   UpOutlined,
   DownOutlined,
+  MoreOutlined,
 } from "@ant-design/icons";
 import "react-resizable/css/styles.css";
 
@@ -139,6 +141,42 @@ const resizableStyles = `
     padding: 0 !important;
     border: none !important;
   }
+
+  /* Action menu icon styling */
+  .row-action-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #64748b;
+  }
+
+  .row-action-icon:hover {
+    background-color: rgba(0, 120, 212, 0.1);
+    color: #0078d4;
+  }
+
+  .row-action-icon.active {
+    background-color: rgba(0, 120, 212, 0.15);
+    color: #0078d4;
+  }
+
+  /* Action column styling */
+  .consistent-height-table .action-column {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    padding: 4px !important;
+    text-align: center !important;
+  }
+
+  .consistent-height-table .ant-table-tbody > tr > td.action-column {
+    padding: 4px !important;
+  }
 `;
 
 // Inject styles
@@ -174,6 +212,11 @@ type Props = {
   onPageSizeChange?: (pageSize: number) => void;
   currentPage?: number;
   onCurrentPageChange?: (currentPage: number) => void;
+  // Action menu props
+  sectionType?: "exact" | "partial" | "no-match";
+  onUnmatch?: () => void;
+  onMoveToExactMatch?: () => void;
+  onMoveToPartialMatch?: () => void;
 };
 
 // Resizable title component with hide button
@@ -268,6 +311,10 @@ function MatchableDataTable({
   onPageSizeChange,
   currentPage: externalCurrentPage,
   onCurrentPageChange,
+  sectionType,
+  onUnmatch,
+  onMoveToExactMatch,
+  onMoveToPartialMatch,
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [previousDataLength, setPreviousDataLength] = useState<number>(
@@ -383,53 +430,36 @@ function MatchableDataTable({
   // Clear all selections when clearSelections prop is true
   useEffect(() => {
     if (clearSelections) {
-      console.log(
-        `Force clearing all selections in MatchableDataTable (fileType: ${fileType})`
-      );
-      console.log("Before clearing - selectedRows:", selectedRows);
-      console.log(
-        "Before clearing - manuallySelectedRows:",
-        manuallySelectedRows
-      );
-      console.log(
-        "Before clearing - externalSelectedRows:",
-        externalSelectedRows
-      );
-
       setSelectedRows([]);
       setManuallySelectedRows([]);
       previousExternalSelectedRowsRef.current = [];
       if (setSelectedRowData) {
         setSelectedRowData([]);
       }
-
-      console.log("After clearing - forced all selections to empty");
     }
-  }, [
-    clearSelections,
-    setSelectedRowData,
-    fileType,
-    selectedRows,
-    manuallySelectedRows,
-    externalSelectedRows,
-  ]);
+  }, [clearSelections, setSelectedRowData, fileType]);
 
   // Update selected rows when external selection changes
   useEffect(() => {
-    console.log("External selection changed:", externalSelectedRows);
-    console.log("Current manual selections:", manuallySelectedRows);
-
     // Combine manual selections with external selections
     const newSelectedRows = [...manuallySelectedRows, ...externalSelectedRows];
 
-    // Only update if selection actually changed
-    if (
-      JSON.stringify(selectedRows.sort()) !==
-      JSON.stringify(newSelectedRows.sort())
-    ) {
-      console.log("Updating selected rows:", newSelectedRows);
-      setSelectedRows(newSelectedRows);
-    }
+    // Use functional update to avoid stale closure and compare with previous state
+    setSelectedRows((prevSelectedRows) => {
+      // Use Set comparison to avoid sort mutation issues
+      const currentSet = new Set(prevSelectedRows);
+      const newSet = new Set(newSelectedRows);
+      
+      const setsAreEqual = 
+        currentSet.size === newSet.size && 
+        Array.from(currentSet).every(item => newSet.has(item));
+
+      // Only update if selection actually changed
+      if (!setsAreEqual) {
+        return newSelectedRows;
+      }
+      return prevSelectedRows;
+    });
 
     // Update the global selected row data for auto-selected rows
     if (setSelectedRowData) {
@@ -460,7 +490,6 @@ function MatchableDataTable({
     manuallySelectedRows,
     data,
     setSelectedRowData,
-    selectedRows,
   ]);
 
   // Helper function to parse matched_insurer_indices and calculate target row indices
@@ -497,10 +526,8 @@ function MatchableDataTable({
         targetIndices.push(targetIdx);
       }
 
-      console.log("Calculated target indices:", targetIndices);
       return targetIndices;
     } catch (error) {
-      console.error("Error parsing matched_insurer_indices:", error);
       return [];
     }
   }, []);
@@ -570,12 +597,110 @@ function MatchableDataTable({
     }),
   }));
 
+  // Build action menu items based on section type
+  const getActionMenuItems = useCallback((): MenuProps["items"] => {
+    const items: MenuProps["items"] = [];
+
+    if (sectionType === "exact" || sectionType === "partial") {
+      // Can unmatch from exact or partial
+      items.push({
+        key: "unmatch",
+        label: (
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "14px" }}>🔗</span>
+            Unmatch
+          </span>
+        ),
+        onClick: (e) => {
+          e.domEvent.stopPropagation();
+          onUnmatch?.();
+        },
+      });
+    }
+
+    if (sectionType === "no-match" || sectionType === "partial") {
+      // Can move to exact match from no-match or partial
+      items.push({
+        key: "moveToExact",
+        label: (
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "14px" }}>✓</span>
+            Move to Exact Match
+          </span>
+        ),
+        onClick: (e) => {
+          e.domEvent.stopPropagation();
+          onMoveToExactMatch?.();
+        },
+      });
+    }
+
+    if (sectionType === "no-match") {
+      // Can move to partial match from no-match
+      items.push({
+        key: "moveToPartial",
+        label: (
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "14px" }}>≈</span>
+            Move to Partial Match
+          </span>
+        ),
+        onClick: (e) => {
+          e.domEvent.stopPropagation();
+          onMoveToPartialMatch?.();
+        },
+      });
+    }
+
+    return items;
+  }, [sectionType, onUnmatch, onMoveToExactMatch, onMoveToPartialMatch]);
+
+  // Action column for selected rows
+  const actionColumn = useMemo(() => {
+    if (!sectionType) return null;
+
+    return {
+      title: "",
+      key: "actions",
+      width: 40,
+      fixed: "left" as const,
+      className: "action-column",
+      render: (_: any, record: any) => {
+        const isSelected = selectedRows.includes(record.idx);
+        if (!isSelected) return null;
+
+        const menuItems = getActionMenuItems();
+        if (!menuItems || menuItems.length === 0) return null;
+
+        return (
+          <Dropdown
+            menu={{ items: menuItems }}
+            trigger={["click"]}
+            placement="bottomLeft"
+          >
+            <div
+              className="row-action-icon"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreOutlined style={{ fontSize: "16px" }} />
+            </div>
+          </Dropdown>
+        );
+      },
+    };
+  }, [sectionType, selectedRows, getActionMenuItems]);
+
+  // Combine action column with data columns
+  const finalColumns = useMemo(() => {
+    if (actionColumn) {
+      return [actionColumn, ...resizableColumns];
+    }
+    return resizableColumns;
+  }, [actionColumn, resizableColumns]);
+
   // Clear selected rows when data length decreases (indicating rows were removed)
   useEffect(() => {
     if (data.length < previousDataLength) {
-      console.log(
-        `Data length decreased from ${previousDataLength} to ${data.length}, clearing selections`
-      );
       setSelectedRows([]);
       // Also clear the global selected row data
       if (setSelectedRowData) {
@@ -595,18 +720,11 @@ function MatchableDataTable({
     }, 0);
   }, [selectedRows, data]);
 
-  // console.log("partialMatches", partialMatches);
-  // console.log("selectedRows", selectedRows);
-
   const handleRowClicked = useCallback(
     (row: any) => {
       // Check if the row is empty (all values are empty strings)
       // const isEmptyRow = Object.values(row).every((value) => value === "");
       const isEmptyRow = row.ProcessedAmount === "";
-
-      console.log("isEmptyRow >>> ", isEmptyRow);
-      console.log("row clicked >>> ", row);
-      console.log("current selectedRows >>> ", selectedRows);
 
       // If the row is empty, don't allow selection
       if (isEmptyRow) {
@@ -627,24 +745,15 @@ function MatchableDataTable({
         const newManualSelection = manuallySelectedRows.filter(
           (id) => id !== row.idx
         );
-        console.log("Removing from manual selection:", row.idx);
         setManuallySelectedRows(newManualSelection);
       } else if (isAutoSelected) {
         // Auto-selected row clicked - remove it from auto-selection
-        console.log(
-          "Auto-selected row clicked - removing from auto-selection:",
-          row.idx
-        );
         if (onRemoveAutoSelection) {
           onRemoveAutoSelection(row.idx);
         }
         return; // Don't add to manual selection, just remove from auto
       } else if (wasManuallyDeselected) {
         // Previously auto-selected row that was manually deselected - restore it
-        console.log(
-          "Manually deselected row clicked - restoring to auto-selection:",
-          row.idx
-        );
         if (onRestoreAutoSelection) {
           onRestoreAutoSelection(row.idx);
         }
@@ -652,7 +761,6 @@ function MatchableDataTable({
       } else {
         // Regular row - add to manual selection
         const newManualSelection = [...manuallySelectedRows, row.idx];
-        console.log("Adding to manual selection:", row.idx);
         setManuallySelectedRows(newManualSelection);
       }
 
@@ -677,30 +785,14 @@ function MatchableDataTable({
         if (!isCurrentlySelected && onRowSelection) {
           // Selecting a CBL row - trigger automatic highlighting
           const targetIndices = calculateTargetRowIndices(row);
-          console.log(
-            "CBL row selected, triggering auto-highlight for indices:",
-            targetIndices
-          );
-          console.log(
-            "matched_insurer_indices raw value:",
-            row.matched_insurer_indices
-          );
 
           if (targetIndices.length > 0) {
             onRowSelection(targetIndices, fileType, row.idx, false);
           }
         } else if (isCurrentlySelected && onRowSelection) {
           // Deselecting a CBL row - clear automatic highlighting
-          console.log("CBL row deselected, clearing auto-highlight");
           onRowSelection([], fileType, row.idx, true);
         }
-      }
-
-      // Handle Insurer table (fileType 2) - allow manual toggle of auto-selected rows
-      if (fileType === 2 && isAutoSelected && isCurrentlySelected) {
-        // User is manually deselecting an auto-selected row
-        console.log("Manually deselecting auto-selected row:", row.idx);
-        // The row will be removed from selection by the logic above
       }
     },
     [
@@ -727,7 +819,6 @@ function MatchableDataTable({
       const isEmptyRow = Object.values(record).every((value) => value === "");
 
       if (isSelected) {
-        console.log(`Row ${record.idx} is highlighted as selected`);
         // Prioritize manual selection over auto-selection for styling
         if (isManuallySelected) {
           return "selected-row"; // Blue highlighting for manual selection
@@ -996,7 +1087,7 @@ function MatchableDataTable({
         </div>
       )}
       <Table
-        columns={resizableColumns}
+        columns={finalColumns}
         dataSource={filteredData}
         rowKey="idx"
         components={{

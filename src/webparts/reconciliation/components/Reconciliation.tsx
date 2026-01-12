@@ -1,14 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useSpContext } from "../../../SpContext";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { Button, useId, Toaster } from "@fluentui/react-components";
-import { fetchFile } from "../../../lib/fetchFiles";
+import { fetchFile } from "../../../utils/fetchFiles";
 import styles from "../components/Reconciliation.module.scss";
 import { IListItemFormUpdateValue } from "@pnp/sp/lists";
 import Header from "../../common/Header";
 import { useTasks } from "../../../context/TaskContext";
 import { useChanges } from "../../../context/ChangesContext";
-import { useReconciliation } from "../../../context/ReconciliationContext";
+import {
+  useReconciliation,
+  ActionHistoryItem,
+} from "../../../context/ReconciliationContext";
 import SummaryTable from "./SummaryTable";
 import MatchableComponent from "./MatchableComponent";
 import SaveChanges from "./SaveChanges";
@@ -20,9 +23,9 @@ import {
   filterOutSelectedRows,
   getNextMatchGroup,
   manualMatching,
-} from "../../../lib/utils";
-import { generateMatrixKeys } from "../../../lib/generateMatrixKeys";
-import { regenerateIdx } from "../../../lib/filterData";
+} from "../../../utils/utils";
+import { generateMatrixKeys } from "../../../utils/generateMatrixKeys";
+import { regenerateIdx } from "../../../utils/filterData";
 
 function Reconciliation() {
   const { context, sp } = useSpContext();
@@ -58,6 +61,9 @@ function Reconciliation() {
     setMatrix,
     clearAllSelections,
     setClearAllSelections,
+    addToHistory,
+    actionHistory,
+    removeFromHistory,
   } = useReconciliation();
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -65,14 +71,260 @@ function Reconciliation() {
   const date = urlParams.get("Date");
 
   // Helper function to trigger clearing all selections
-  const triggerClearAllSelections = () => {
+  const triggerClearAllSelections = useCallback(() => {
     console.log("Triggering clear all selections");
     setClearAllSelections(true);
     // Reset the trigger after a brief delay to allow components to react
     setTimeout(() => {
       setClearAllSelections(false);
     }, 100);
-  };
+  }, [setClearAllSelections]);
+
+  // Handle undo actions
+  const handleUndoActions = useCallback(
+    (actionIds: string[]) => {
+      console.log("=== handleUndoActions CALLED ===");
+      console.log("actionIds received:", actionIds);
+      console.log("actionHistory:", actionHistory);
+      console.log("Undoing actions:", actionIds);
+
+      // Get the actions to undo (in reverse order - newest first)
+      const actionsToUndo = actionHistory
+        .filter((action) => actionIds.includes(action.id))
+        .sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+
+      if (actionsToUndo.length === 0) return;
+
+      // Track cumulative changes
+      let currentExactMatchCBL = [...exactMatchCBL];
+      let currentExactMatchInsurer = [...exactMatchInsurer];
+      let currentPartialMatchCBL = [...partialMatchCBL];
+      let currentPartialMatchInsurer = [...partialMatchInsurer];
+      let currentNoMatchCBL = [...noMatchCBL];
+      let currentNoMatchInsurer = [...noMatchInsurer];
+
+      // Process each action in reverse
+      actionsToUndo.forEach((action) => {
+        console.log("=== Processing undo for action ===");
+        console.log("Full action object:", JSON.stringify(action, null, 2));
+        console.log("action.cblRowIndices:", action.cblRowIndices);
+        console.log("action.insurerRowIndices:", action.insurerRowIndices);
+
+        const {
+          fromSection,
+          toSection,
+          cblRows,
+          insurerRows,
+          cblRowIndices,
+          insurerRowIndices,
+        } = action;
+
+        console.log("Destructured values:");
+        console.log("  fromSection:", fromSection);
+        console.log("  toSection:", toSection);
+        console.log("  cblRows count:", cblRows?.length);
+        console.log("  insurerRows count:", insurerRows?.length);
+        console.log("  cblRowIndices:", cblRowIndices);
+        console.log("  insurerRowIndices:", insurerRowIndices);
+
+        // Helper to find and remove rows by matching key fields
+        const removeRowsByMatch = (
+          sourceArray: any[],
+          rowsToRemove: any[]
+        ): any[] => {
+          return sourceArray.filter((sourceRow) => {
+            // Check if any row in rowsToRemove matches this source row
+            return !rowsToRemove.some((removeRow) => {
+              // Match by ProcessedPolicyNumber and ProcessedAmount
+              return (
+                sourceRow.ProcessedPolicyNumber ===
+                  removeRow.ProcessedPolicyNumber &&
+                sourceRow.ProcessedAmount === removeRow.ProcessedAmount
+              );
+            });
+          });
+        };
+
+        // Helper to insert rows at specific indices
+        const insertRowsAtIndices = (
+          targetArray: any[],
+          rowsToInsert: any[],
+          indices: number[]
+        ): any[] => {
+          console.log("insertRowsAtIndices called:");
+          console.log("  - targetArray length:", targetArray.length);
+          console.log("  - rowsToInsert count:", rowsToInsert.length);
+          console.log("  - indices:", indices);
+
+          const result = [...targetArray];
+
+          // Pair each row with its original index
+          const rowsWithIndices = rowsToInsert.map((row, i) => ({
+            row,
+            index: indices[i] !== undefined ? indices[i] : result.length + i,
+          }));
+
+          console.log(
+            "  - rowsWithIndices:",
+            rowsWithIndices.map((r) => ({ idx: r.row.idx, index: r.index }))
+          );
+
+          // Sort by index in ASCENDING order - this is critical!
+          // When we insert at lower indices first, items shift right naturally
+          // Example: restoring [b at 1, d at 3] to [a, c, e]
+          // - Insert b at 1: [a, b, c, e] (c, e shifted right)
+          // - Insert d at 3: [a, b, c, d, e] (e shifts to 4)
+          rowsWithIndices.sort((a, b) => a.index - b.index);
+
+          console.log(
+            "  - sorted rowsWithIndices:",
+            rowsWithIndices.map((r) => ({ idx: r.row.idx, index: r.index }))
+          );
+
+          // Insert each row at its original position (NO offset needed!)
+          // The splice operation naturally shifts subsequent items
+          rowsWithIndices.forEach(({ row, index }) => {
+            const insertIndex = Math.min(Math.max(0, index), result.length);
+            console.log(
+              `  - Inserting row ${row.idx} at index ${insertIndex} (original: ${index})`
+            );
+            result.splice(insertIndex, 0, row);
+          });
+
+          return result;
+        };
+
+        // Remove from the destination section
+        if (toSection === "exact") {
+          currentExactMatchCBL = removeRowsByMatch(
+            currentExactMatchCBL,
+            cblRows
+          );
+          currentExactMatchInsurer = removeRowsByMatch(
+            currentExactMatchInsurer,
+            insurerRows
+          );
+        } else if (toSection === "partial") {
+          currentPartialMatchCBL = removeRowsByMatch(
+            currentPartialMatchCBL,
+            cblRows
+          );
+          currentPartialMatchInsurer = removeRowsByMatch(
+            currentPartialMatchInsurer,
+            insurerRows
+          );
+        } else if (toSection === "no-match") {
+          currentNoMatchCBL = removeRowsByMatch(currentNoMatchCBL, cblRows);
+          currentNoMatchInsurer = removeRowsByMatch(
+            currentNoMatchInsurer,
+            insurerRows
+          );
+        }
+
+        // Add back to the source section at original indices
+        if (fromSection === "exact") {
+          currentExactMatchCBL = insertRowsAtIndices(
+            currentExactMatchCBL,
+            cblRows,
+            cblRowIndices || []
+          );
+          currentExactMatchInsurer = insertRowsAtIndices(
+            currentExactMatchInsurer,
+            insurerRows,
+            insurerRowIndices || []
+          );
+        } else if (fromSection === "partial") {
+          currentPartialMatchCBL = insertRowsAtIndices(
+            currentPartialMatchCBL,
+            cblRows,
+            cblRowIndices || []
+          );
+          currentPartialMatchInsurer = insertRowsAtIndices(
+            currentPartialMatchInsurer,
+            insurerRows,
+            insurerRowIndices || []
+          );
+        } else if (fromSection === "no-match") {
+          currentNoMatchCBL = insertRowsAtIndices(
+            currentNoMatchCBL,
+            cblRows,
+            cblRowIndices || []
+          );
+          currentNoMatchInsurer = insertRowsAtIndices(
+            currentNoMatchInsurer,
+            insurerRows,
+            insurerRowIndices || []
+          );
+        }
+      });
+
+      // Regenerate indices for all affected sections
+      const regeneratedExactMatchCBL = regenerateIdx(
+        currentExactMatchCBL,
+        "exact"
+      );
+      const regeneratedExactMatchInsurer = regenerateIdx(
+        currentExactMatchInsurer,
+        "exact"
+      );
+      const regeneratedPartialMatchCBL = regenerateIdx(
+        currentPartialMatchCBL,
+        "partial"
+      );
+      const regeneratedPartialMatchInsurer = regenerateIdx(
+        currentPartialMatchInsurer,
+        "partial"
+      );
+      const regeneratedNoMatchCBL = regenerateIdx(
+        currentNoMatchCBL,
+        "no-match"
+      );
+      const regeneratedNoMatchInsurer = regenerateIdx(
+        currentNoMatchInsurer,
+        "no-match"
+      );
+
+      // Update all state
+      setExactMatchCBL(regeneratedExactMatchCBL);
+      setExactMatchInsurer(regeneratedExactMatchInsurer);
+      setPartialMatchCBL(regeneratedPartialMatchCBL);
+      setPartialMatchInsurer(regeneratedPartialMatchInsurer);
+      setNoMatchCBL(regeneratedNoMatchCBL);
+      setNoMatchInsurer(regeneratedNoMatchInsurer);
+
+      // Remove the undone actions from history
+      removeFromHistory(actionIds);
+
+      // Mark changes (so save button becomes enabled)
+      setChanges(true);
+
+      // Clear selections
+      triggerClearAllSelections();
+
+      console.log("Undo completed successfully");
+    },
+    [
+      actionHistory,
+      exactMatchCBL,
+      exactMatchInsurer,
+      partialMatchCBL,
+      partialMatchInsurer,
+      noMatchCBL,
+      noMatchInsurer,
+      setExactMatchCBL,
+      setExactMatchInsurer,
+      setPartialMatchCBL,
+      setPartialMatchInsurer,
+      setNoMatchCBL,
+      setNoMatchInsurer,
+      removeFromHistory,
+      setChanges,
+      triggerClearAllSelections,
+    ]
+  );
 
   const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/${insuranceName}/${date}/output.xlsx`;
   console.log("URL >>> ", url);
@@ -206,6 +458,30 @@ function Reconciliation() {
         console.log("Selected CBL rows:", selectedRowCBL);
         console.log("Selected Insurer rows:", selectedRowInsurer);
 
+        // Get original indices before removal
+        const cblRowIndices = selectedRowCBL
+          .map((selectedRow) =>
+            noMatchCBL.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+        const insurerRowIndices = selectedRowInsurer
+          .map((selectedRow) =>
+            noMatchInsurer.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+
+        // Add to action history for undo
+        addToHistory({
+          actionType: "moveToPartial",
+          fromSection: "no-match",
+          toSection: "partial",
+          cblRows: [...selectedRowCBL],
+          insurerRows: [...selectedRowInsurer],
+          cblRowIndices,
+          insurerRowIndices,
+          matrixKey,
+        });
+
         // Remove selected rows from no match sections
         const updatedNoMatchCBL = filterOutSelectedRows(
           noMatchCBL,
@@ -318,6 +594,36 @@ function Reconciliation() {
         console.log("Moving from exact match to no match");
         console.log("Selected CBL rows:", selectedRowCBL);
         console.log("Selected Insurer rows:", selectedRowInsurer);
+
+        // Get original indices before removal
+        const cblRowIndices = selectedRowCBL
+          .map((selectedRow) =>
+            exactMatchCBL.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+        const insurerRowIndices = selectedRowInsurer
+          .map((selectedRow) =>
+            exactMatchInsurer.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+
+        console.log("CAPTURED INDICES for exact match unmatch:");
+        console.log("  - cblRowIndices:", cblRowIndices);
+        console.log("  - insurerRowIndices:", insurerRowIndices);
+        console.log("  - exactMatchCBL length:", exactMatchCBL.length);
+        console.log("  - exactMatchInsurer length:", exactMatchInsurer.length);
+
+        // Add to action history for undo
+        addToHistory({
+          actionType: "unmatch",
+          fromSection: "exact",
+          toSection: "no-match",
+          cblRows: [...selectedRowCBL],
+          insurerRows: [...selectedRowInsurer],
+          cblRowIndices,
+          insurerRowIndices,
+          matrixKey,
+        });
 
         // Handle one-to-many matches by removing all related rows
         const rowsToRemoveCBL = new Set<number>();
@@ -485,6 +791,30 @@ function Reconciliation() {
         console.log("Moving from partial match to no match");
         console.log("Selected CBL rows:", selectedRowCBL);
         console.log("Selected Insurer rows:", selectedRowInsurer);
+
+        // Get original indices before removal
+        const cblRowIndices = selectedRowCBL
+          .map((selectedRow) =>
+            partialMatchCBL.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+        const insurerRowIndices = selectedRowInsurer
+          .map((selectedRow) =>
+            partialMatchInsurer.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+
+        // Add to action history for undo
+        addToHistory({
+          actionType: "unmatch",
+          fromSection: "partial",
+          toSection: "no-match",
+          cblRows: [...selectedRowCBL],
+          insurerRows: [...selectedRowInsurer],
+          cblRowIndices,
+          insurerRowIndices,
+          matrixKey,
+        });
 
         // Handle one-to-many matches by removing all related rows
         const rowsToRemoveCBL = new Set<number>();
@@ -679,6 +1009,30 @@ function Reconciliation() {
         console.log("Selected CBL rows:", selectedRowCBL);
         console.log("Selected Insurer rows:", selectedRowInsurer);
 
+        // Get original indices before removal
+        const cblRowIndices = selectedRowCBL
+          .map((selectedRow) =>
+            noMatchCBL.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+        const insurerRowIndices = selectedRowInsurer
+          .map((selectedRow) =>
+            noMatchInsurer.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+
+        // Add to action history for undo
+        addToHistory({
+          actionType: "moveToExact",
+          fromSection: "no-match",
+          toSection: "exact",
+          cblRows: [...selectedRowCBL],
+          insurerRows: [...selectedRowInsurer],
+          cblRowIndices,
+          insurerRowIndices,
+          matrixKey,
+        });
+
         // Remove selected rows from no match sections
         const updatedNoMatchCBL = filterOutSelectedRows(
           noMatchCBL,
@@ -708,6 +1062,30 @@ function Reconciliation() {
         console.log("Moving from partial match to exact match");
         console.log("Selected CBL rows:", selectedRowCBL);
         console.log("Selected Insurer rows:", selectedRowInsurer);
+
+        // Get original indices before removal
+        const cblRowIndices = selectedRowCBL
+          .map((selectedRow) =>
+            partialMatchCBL.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+        const insurerRowIndices = selectedRowInsurer
+          .map((selectedRow) =>
+            partialMatchInsurer.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+
+        // Add to action history for undo
+        addToHistory({
+          actionType: "moveToExact",
+          fromSection: "partial",
+          toSection: "exact",
+          cblRows: [...selectedRowCBL],
+          insurerRows: [...selectedRowInsurer],
+          cblRowIndices,
+          insurerRowIndices,
+          matrixKey,
+        });
 
         const { updatedRowsCBL, updatedRowsInsurer, updatedNoMatchInsurer } =
           manualMatching(
@@ -802,7 +1180,7 @@ function Reconciliation() {
         {/* Exact Matches Header */}
         <div className={styles.partialHeader}>
           <div></div>
-          <SaveChanges />
+          <SaveChanges onUndo={handleUndoActions} />
         </div>
 
         {/* Exact Matches */}
@@ -812,6 +1190,7 @@ function Reconciliation() {
           insuranceName={insuranceName || ""}
           clearSelections={clearAllSelections}
           loading={isLoading}
+          onUnmatch={handleUnmatch}
         />
 
         {/* Partial Matches Header */}
@@ -873,6 +1252,8 @@ function Reconciliation() {
           insuranceName={insuranceName || ""}
           clearSelections={clearAllSelections}
           loading={isLoading}
+          onUnmatch={handleUnmatch}
+          onMoveToExactMatch={handleMoveToExactMatch}
         />
 
         <div className={styles.partialHeader}>
@@ -908,6 +1289,8 @@ function Reconciliation() {
           insuranceName={insuranceName || ""}
           clearSelections={clearAllSelections}
           loading={isLoading}
+          onMoveToExactMatch={handleMoveToExactMatch}
+          onMoveToPartialMatch={handleMoveToPartialMatch}
         />
       </div>
     </>

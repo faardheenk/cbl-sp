@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Form, Row, Col, Button, Spinner } from "react-bootstrap";
 import styles from "./UploadModal.module.scss";
-import { uploadExcelFiles } from "../../lib/uploadFiles";
+import { uploadExcelFiles } from "../../utils/uploadFiles";
 import { useSpContext } from "../../SpContext";
 import { useTasks } from "../../context/TaskContext";
 import RobotLoader from "./RobotLoaders";

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { MoneyRegular, DocumentRegular } from "@fluentui/react-icons";
 import styles from "./Reconciliation.module.scss";
-import { countNonBlankRows, formatAmount } from "../../../lib/utils";
+import { countNonBlankRows, formatAmount } from "../../../utils/utils";
 import MatchableDataTable from "./MatchableDataTable";
 import { useReconciliation } from "../../../context/ReconciliationContext";
 
@@ -11,6 +11,10 @@ type MatchableComponentProps = {
   type: "exact" | "partial" | "no-match";
   clearSelections?: boolean;
   loading?: boolean;
+  // Action handlers
+  onUnmatch?: () => void;
+  onMoveToExactMatch?: () => void;
+  onMoveToPartialMatch?: () => void;
 };
 
 function MatchableComponent({
@@ -19,6 +23,9 @@ function MatchableComponent({
   type,
   clearSelections = false,
   loading = false,
+  onUnmatch,
+  onMoveToExactMatch,
+  onMoveToPartialMatch,
 }: MatchableComponentProps) {
   const {
     exactMatchCBL,
@@ -130,31 +137,11 @@ function MatchableComponent({
   // Clear cross-table selections when clearSelections prop is true
   useEffect(() => {
     if (clearSelections || clearAllSelections) {
-      console.log(
-        `Force clearing cross-table selections in MatchableComponent (type: ${type})`
-      );
-      console.log(
-        "Before clearing - autoSelectedInsurerRows:",
-        autoSelectedInsurerRows
-      );
-      console.log(
-        "Before clearing - cblSelectionMappings:",
-        Array.from(cblSelectionMappings.entries())
-      );
-
       setAutoSelectedInsurerRows([]);
       setCblSelectionMappings(new Map());
       setManuallyDeselectedRows(new Set());
-
-      console.log("After clearing - forced cross-table selections to empty");
     }
-  }, [
-    clearSelections,
-    clearAllSelections,
-    type,
-    autoSelectedInsurerRows,
-    cblSelectionMappings,
-  ]);
+  }, [clearSelections, clearAllSelections]);
 
   // Handler for automatic row selection
   const handleRowSelection = (
@@ -163,30 +150,14 @@ function MatchableComponent({
     sourceRowId?: string,
     isDeselection?: boolean
   ) => {
-    console.log("Cross-table selection triggered:", {
-      selectedRowIndices,
-      sourceFileType,
-      sourceRowId,
-      isDeselection,
-      currentAutoSelected: autoSelectedInsurerRows,
-      currentMappings: Array.from(cblSelectionMappings.entries()),
-    });
-
     if (sourceFileType === 1 && sourceRowId) {
       const newMappings = new Map(cblSelectionMappings);
 
       if (isDeselection) {
         // Remove this CBL row's mapping
-        console.log(
-          `CBL row ${sourceRowId} deselected - removing its Insurer mappings`
-        );
         newMappings.delete(sourceRowId);
       } else {
         // Add/update this CBL row's mapping
-        console.log(
-          `CBL row ${sourceRowId} selected - adding Insurer mappings:`,
-          selectedRowIndices
-        );
         newMappings.set(sourceRowId, selectedRowIndices);
       }
 
@@ -204,36 +175,23 @@ function MatchableComponent({
         new Set(allAutoSelectedRows)
       ).filter((rowId) => !manuallyDeselectedRows.has(rowId));
 
-      console.log(
-        "Updated auto-selected Insurer rows:",
-        uniqueAutoSelectedRows
-      );
       setAutoSelectedInsurerRows(uniqueAutoSelectedRows);
     }
   };
 
   // Handler for when Insurer table rows are manually toggled
   const handleInsurerRowSelection = (
-    selectedRowIndices: string[],
-    sourceFileType: 1 | 2,
-    sourceRowId?: string,
-    isDeselection?: boolean
+    _selectedRowIndices: string[],
+    _sourceFileType: 1 | 2,
+    _sourceRowId?: string,
+    _isDeselection?: boolean
   ) => {
-    console.log("Insurer table manual selection:", {
-      selectedRowIndices,
-      sourceFileType,
-      sourceRowId,
-      isDeselection,
-    });
-
     // If user manually deselects auto-selected rows, we might want to handle this
     // For now, we'll allow the manual override without affecting CBL selection
   };
 
   // Handler for removing specific auto-selected rows
   const handleRemoveAutoSelection = (rowId: string) => {
-    console.log("Removing auto-selected row:", rowId);
-
     // Mark this row as manually deselected
     const newManuallyDeselected = new Set(manuallyDeselectedRows);
     newManuallyDeselected.add(rowId);
@@ -244,14 +202,10 @@ function MatchableComponent({
       (id) => id !== rowId
     );
     setAutoSelectedInsurerRows(newAutoSelected);
-
-    console.log("Row marked as manually deselected:", rowId);
   };
 
   // Handler for re-selecting a manually deselected row
   const handleRestoreAutoSelection = (rowId: string) => {
-    console.log("Restoring auto-selected row:", rowId);
-
     // Remove from manually deselected set
     const newManuallyDeselected = new Set(manuallyDeselectedRows);
     newManuallyDeselected.delete(rowId);
@@ -267,7 +221,6 @@ function MatchableComponent({
     if (shouldBeAutoSelected && !autoSelectedInsurerRows.includes(rowId)) {
       const newAutoSelected = [...autoSelectedInsurerRows, rowId];
       setAutoSelectedInsurerRows(newAutoSelected);
-      console.log("Row restored to auto-selection:", rowId);
     }
   };
 
@@ -329,6 +282,10 @@ function MatchableComponent({
                   onPageSizeChange={setSharedPageSize}
                   currentPage={sharedCurrentPage}
                   onCurrentPageChange={setSharedCurrentPage}
+                  sectionType={type}
+                  onUnmatch={onUnmatch}
+                  onMoveToExactMatch={onMoveToExactMatch}
+                  onMoveToPartialMatch={onMoveToPartialMatch}
                 />
               </div>
             </div>
@@ -381,6 +338,10 @@ function MatchableComponent({
                   onPageSizeChange={setSharedPageSize}
                   currentPage={sharedCurrentPage}
                   onCurrentPageChange={setSharedCurrentPage}
+                  sectionType={type}
+                  onUnmatch={onUnmatch}
+                  onMoveToExactMatch={onMoveToExactMatch}
+                  onMoveToPartialMatch={onMoveToPartialMatch}
                 />
               </div>
             </div>

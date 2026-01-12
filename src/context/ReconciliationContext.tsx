@@ -1,6 +1,21 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { ColumnsType } from "antd/es/table";
 
+// Action history item type for undo functionality
+export interface ActionHistoryItem {
+  id: string;
+  timestamp: Date;
+  actionType: "moveToPartial" | "moveToExact" | "unmatch";
+  fromSection: "exact" | "partial" | "no-match";
+  toSection: "exact" | "partial" | "no-match";
+  cblRows: any[];
+  insurerRows: any[];
+  // Original indices in the source array (for restoring at exact position)
+  cblRowIndices: number[];
+  insurerRowIndices: number[];
+  matrixKey: string;
+}
+
 interface ReconciliationContextType {
   // Exact match states
   exactMatchCBL: any[];
@@ -77,6 +92,13 @@ interface ReconciliationContextType {
   // Clear selections trigger
   clearAllSelections: boolean;
   setClearAllSelections: React.Dispatch<React.SetStateAction<boolean>>;
+
+  // Action history for undo functionality
+  actionHistory: ActionHistoryItem[];
+  setActionHistory: React.Dispatch<React.SetStateAction<ActionHistoryItem[]>>;
+  addToHistory: (item: Omit<ActionHistoryItem, "id" | "timestamp">) => void;
+  removeFromHistory: (ids: string[]) => void;
+  clearHistory: () => void;
 }
 
 const ReconciliationContext = createContext<
@@ -134,6 +156,26 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
 
   // Clear selections trigger
   const [clearAllSelections, setClearAllSelections] = useState<boolean>(false);
+
+  // Action history for undo functionality
+  const [actionHistory, setActionHistory] = useState<ActionHistoryItem[]>([]);
+
+  const addToHistory = (item: Omit<ActionHistoryItem, "id" | "timestamp">) => {
+    const newItem: ActionHistoryItem = {
+      ...item,
+      id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date(),
+    };
+    setActionHistory((prev) => [...prev, newItem]);
+  };
+
+  const removeFromHistory = (ids: string[]) => {
+    setActionHistory((prev) => prev.filter((item) => !ids.includes(item.id)));
+  };
+
+  const clearHistory = () => {
+    setActionHistory([]);
+  };
 
   return (
     <ReconciliationContext.Provider
@@ -213,6 +255,13 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
         // Clear selections trigger
         clearAllSelections,
         setClearAllSelections,
+
+        // Action history for undo functionality
+        actionHistory,
+        setActionHistory,
+        addToHistory,
+        removeFromHistory,
+        clearHistory,
       }}
     >
       {children}

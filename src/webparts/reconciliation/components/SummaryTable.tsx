@@ -1,7 +1,7 @@
 import React from "react";
 import styles from "./Reconciliation.module.scss";
 import { MoneyRegular, DocumentRegular } from "@fluentui/react-icons";
-import { countNonBlankRows, formatAmount } from "../../../lib/utils";
+import { countNonBlankRows, formatAmount } from "../../../utils/utils";
 import { useReconciliation } from "../../../context/ReconciliationContext";
 
 type SummaryTableProps = {
