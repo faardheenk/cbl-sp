@@ -5,7 +5,7 @@ import { BaseClientSideWebPart } from "@microsoft/sp-webpart-base";
 import Landing from "./components/Landing";
 import { SpContext } from "../../SpContext";
 import { TaskProvider } from "../../context/TaskContext";
-import { getSP } from "../../pnpjsConfig";
+import { getSP, resetSP } from "../../pnpjsConfig";
 import { ReconciliationProvider } from "../../context/ReconciliationContext";
 
 export interface ILandingWebPartProps {
@@ -59,6 +59,7 @@ export default class LandingWebPart extends BaseClientSideWebPart<{}> {
 
   protected onDispose(): void {
     ReactDom.unmountComponentAtNode(this.domElement);
+    resetSP(); // Reset SharePoint context when disposing
   }
 
   protected get dataVersion(): Version {

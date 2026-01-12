@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useSpContext } from "../../../SpContext";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { Button, useId, Toaster } from "@fluentui/react-components";
@@ -26,6 +26,7 @@ import { regenerateIdx } from "../../../lib/filterData";
 
 function Reconciliation() {
   const { context, sp } = useSpContext();
+  const [isLoading, setIsLoading] = useState(true);
   const { updateTaskStatus, tasks } = useTasks();
   const { setChanges } = useChanges();
   const {
@@ -76,61 +77,82 @@ function Reconciliation() {
   const url = `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/${insuranceName}/${date}/output.xlsx`;
   console.log("URL >>> ", url);
   useEffect(() => {
+    // Guard clause to ensure sp and required parameters are available
+    if (!sp || !insuranceName || !date) {
+      console.log("Waiting for required parameters:", {
+        sp: !!sp,
+        insuranceName,
+        date,
+      });
+      return;
+    }
+
     const fetchData = async () => {
-      const {
-        exactMatchCBL,
-        exactMatchInsurer,
-        partialMatchCBL,
-        partialMatchInsurer,
-        noMatchCBL,
-        noMatchInsurer,
-        columnNames,
-      } = await fetchFile(url, sp);
-      setExactMatchCBL(exactMatchCBL);
-      setExactMatchInsurer(exactMatchInsurer);
-      setPartialMatchCBL(partialMatchCBL);
-      setPartialMatchInsurer(partialMatchInsurer);
-      setNoMatchCBL(noMatchCBL);
-      setNoMatchInsurer(noMatchInsurer);
+      try {
+        setIsLoading(true);
+        const {
+          exactMatchCBL,
+          exactMatchInsurer,
+          partialMatchCBL,
+          partialMatchInsurer,
+          noMatchCBL,
+          noMatchInsurer,
+          columnNames,
+        } = await fetchFile(url, sp);
+        setExactMatchCBL(exactMatchCBL);
+        setExactMatchInsurer(exactMatchInsurer);
+        setPartialMatchCBL(partialMatchCBL);
+        setPartialMatchInsurer(partialMatchInsurer);
+        setNoMatchCBL(noMatchCBL);
+        setNoMatchInsurer(noMatchInsurer);
 
-      // console.log("columns names >>> ", columnNames);
-      setCblColumns(columnNames.cbl);
-      setInsurerColumns(columnNames.insurer);
+        setCblColumns(columnNames.cbl);
+        setInsurerColumns(columnNames.insurer);
 
-      const { sum1, sum2 } = calculateSum(exactMatchCBL, exactMatchInsurer);
-      setExactMatchSum1(sum1);
-      setExactMatchSum2(sum2);
+        const { sum1, sum2 } = calculateSum(exactMatchCBL, exactMatchInsurer);
+        setExactMatchSum1(sum1);
+        setExactMatchSum2(sum2);
 
-      const { sum1: partialMatchSum1, sum2: partialMatchSum2 } = calculateSum(
-        partialMatchCBL,
-        partialMatchInsurer
-      );
-      setPartialMatchSum1(partialMatchSum1);
-      setPartialMatchSum2(partialMatchSum2);
+        const { sum1: partialMatchSum1, sum2: partialMatchSum2 } = calculateSum(
+          partialMatchCBL,
+          partialMatchInsurer
+        );
+        setPartialMatchSum1(partialMatchSum1);
+        setPartialMatchSum2(partialMatchSum2);
 
-      const { sum1: noMatchSum1, sum2: noMatchSum2 } = calculateSum(
-        noMatchCBL,
-        noMatchInsurer
-      );
-      setNoMatchSum1(noMatchSum1);
-      setNoMatchSum2(noMatchSum2);
+        const { sum1: noMatchSum1, sum2: noMatchSum2 } = calculateSum(
+          noMatchCBL,
+          noMatchInsurer
+        );
+        setNoMatchSum1(noMatchSum1);
+        setNoMatchSum2(noMatchSum2);
+      } catch (error) {
+        console.error("Failed to fetch data:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     const fetchColumnMappings = async () => {
-      const columnMappings = await sp.web.lists.getByTitle("Mappings");
+      try {
+        const columnMappings = await sp.web.lists.getByTitle("Mappings");
 
-      const [{ ColumnMappings: cbl }]: [{ ColumnMappings: string }] =
-        await columnMappings.items.filter(`Title eq 'CBL'`)();
+        const [{ ColumnMappings: cbl }]: [{ ColumnMappings: string }] =
+          await columnMappings.items.filter(`Title eq 'CBL'`)();
 
-      const [{ ColumnMappings: insuranceColumnMappings }]: [
-        { ColumnMappings: string }
-      ] = await columnMappings.items.filter(
-        `Title eq '${insuranceName?.toUpperCase()}'`
-      )();
+        const [{ ColumnMappings: insuranceColumnMappings }]: [
+          { ColumnMappings: string }
+        ] = await columnMappings.items.filter(
+          `Title eq '${insuranceName?.toUpperCase()}'`
+        )();
+      } catch (error) {
+        console.error("Failed to fetch column mappings:", error);
+      }
     };
+
     fetchData();
     fetchColumnMappings();
-  }, []);
+  }, [sp, insuranceName, date, url]);
 
   useEffect(() => {
     const { sum1, sum2 } = calculateSum(exactMatchCBL, exactMatchInsurer);
@@ -789,6 +811,7 @@ function Reconciliation() {
           type="exact"
           insuranceName={insuranceName || ""}
           clearSelections={clearAllSelections}
+          loading={isLoading}
         />
 
         {/* Partial Matches Header */}
@@ -849,6 +872,7 @@ function Reconciliation() {
           type="partial"
           insuranceName={insuranceName || ""}
           clearSelections={clearAllSelections}
+          loading={isLoading}
         />
 
         <div className={styles.partialHeader}>
@@ -883,6 +907,7 @@ function Reconciliation() {
           type="no-match"
           insuranceName={insuranceName || ""}
           clearSelections={clearAllSelections}
+          loading={isLoading}
         />
       </div>
     </>

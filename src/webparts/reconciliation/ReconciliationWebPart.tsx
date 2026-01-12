@@ -4,7 +4,7 @@ import { BaseClientSideWebPart } from "@microsoft/sp-webpart-base";
 import { SpContext } from "../../SpContext";
 import Reconciliation from "./components/Reconciliation";
 import { Version } from "@microsoft/sp-core-library";
-import { getSP } from "../../pnpjsConfig";
+import { getSP, resetSP } from "../../pnpjsConfig";
 import { TaskProvider } from "../../context/TaskContext";
 import { ChangesProvider } from "../../context/ChangesContext";
 import { ReconciliationProvider } from "../../context/ReconciliationContext";
@@ -48,6 +48,7 @@ export default class ReconciliationWebPart extends BaseClientSideWebPart<{}> {
 
   protected onDispose(): void {
     ReactDom.unmountComponentAtNode(this.domElement);
+    resetSP(); // Reset SharePoint context when disposing
   }
 
   protected get dataVersion(): Version {

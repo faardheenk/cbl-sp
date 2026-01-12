@@ -449,6 +449,9 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
         // Clear file inputs
         if (file1InputRef.current) file1InputRef.current.value = "";
         if (file2InputRef.current) file2InputRef.current.value = "";
+
+        // Refetch CBL mapping data for next mapping session
+        fetchExistingInsuranceMappings();
       });
   };
 
@@ -476,7 +479,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
     <>
       <Toaster toasterId={toasterId} />
       <div className={styles["mapping-container"]}>
-        <h2>Insurance Column Mapping</h2>
+        <h5 className="mb-4">Insurance Column Mapping</h5>
 
         <div className={styles["input-group"]}>
           <label>Insurance Name</label>

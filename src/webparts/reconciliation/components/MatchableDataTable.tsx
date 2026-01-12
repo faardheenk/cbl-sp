@@ -1,8 +1,19 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { Table, Button, Tooltip } from "antd";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import { Table, Button, Tooltip, Input } from "antd";
 import { ColumnsType } from "antd/es/table";
 import { Resizable, ResizeCallbackData } from "react-resizable";
-import { EyeInvisibleOutlined } from "@ant-design/icons";
+import {
+  EyeInvisibleOutlined,
+  SearchOutlined,
+  UpOutlined,
+  DownOutlined,
+} from "@ant-design/icons";
 import "react-resizable/css/styles.css";
 
 // Custom styles for resizable handles and consistent row heights
@@ -95,6 +106,17 @@ const resizableStyles = `
   .consistent-height-table .ant-table-tbody > tr.auto-selected-row:hover > td {
     background-color: rgba(34, 197, 94, 0.2) !important;
   }
+
+  /* Manually deselected row styling - subtle indication it can be restored */
+  .consistent-height-table .ant-table-tbody > tr.manually-deselected-row > td {
+    background-color: rgba(156, 163, 175, 0.1) !important; /* Light gray tint */
+    border-left: 2px dashed rgba(156, 163, 175, 0.5) !important; /* Dashed gray border */
+  }
+
+  .consistent-height-table .ant-table-tbody > tr.manually-deselected-row:hover > td {
+    background-color: rgba(34, 197, 94, 0.1) !important; /* Green on hover to indicate it can be restored */
+    cursor: pointer !important;
+  }
   
   /* Empty row styling */
   .consistent-height-table .ant-table-tbody > tr.empty-row > td {
@@ -140,8 +162,18 @@ type Props = {
     sourceRowId?: string,
     isDeselection?: boolean
   ) => void;
+  onRemoveAutoSelection?: (rowId: string) => void;
+  onRestoreAutoSelection?: (rowId: string) => void;
+  manuallyDeselectedRows?: string[];
   externalSelectedRows?: string[];
   clearSelections?: boolean;
+  loading?: boolean;
+  searchText?: string;
+  onSearchChange?: (searchText: string) => void;
+  pageSize?: number;
+  onPageSizeChange?: (pageSize: number) => void;
+  currentPage?: number;
+  onCurrentPageChange?: (currentPage: number) => void;
 };
 
 // Resizable title component with hide button
@@ -224,18 +256,129 @@ function MatchableDataTable({
   columns,
   onColumnsChange,
   onRowSelection,
+  onRemoveAutoSelection,
+  onRestoreAutoSelection,
+  manuallyDeselectedRows = [],
   externalSelectedRows = [],
   clearSelections = false,
+  loading = false,
+  searchText: externalSearchText,
+  onSearchChange,
+  pageSize: externalPageSize,
+  onPageSizeChange,
+  currentPage: externalCurrentPage,
+  onCurrentPageChange,
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [previousDataLength, setPreviousDataLength] = useState<number>(
     data.length
   );
+  // Use external search text if provided, otherwise use local state
+  const [localSearchText, setLocalSearchText] = useState<string>("");
+  const searchText =
+    externalSearchText !== undefined ? externalSearchText : localSearchText;
+  const handleSearchChange = onSearchChange || setLocalSearchText;
 
   // Track which rows were auto-selected vs manually selected
   const [manuallySelectedRows, setManuallySelectedRows] = useState<string[]>(
     []
   );
+
+  // Ref for table wrapper to enable scrolling
+  const tableWrapperRef = useRef<HTMLDivElement>(null);
+  const previousExternalSelectedRowsRef = useRef<string[]>([]);
+
+  // Track current navigation index through selected rows
+  const [currentNavigationIndex, setCurrentNavigationIndex] =
+    useState<number>(-1);
+
+  // Pagination state - use external if provided, otherwise local
+  const [localPageSize, setLocalPageSize] = useState<number>(50);
+  const pageSize =
+    externalPageSize !== undefined ? externalPageSize : localPageSize;
+  const handlePageSizeChange = onPageSizeChange || setLocalPageSize;
+
+  const [localCurrentPage, setLocalCurrentPage] = useState<number>(1);
+  const currentPage =
+    externalCurrentPage !== undefined ? externalCurrentPage : localCurrentPage;
+  const handleCurrentPageChange = onCurrentPageChange || setLocalCurrentPage;
+
+  // Filter data based on search text
+  const filteredData = useMemo(() => {
+    if (!searchText.trim()) return data;
+
+    const searchLower = searchText.toLowerCase();
+    return data.filter((row) => {
+      return Object.values(row).some((value) => {
+        if (value === null || value === undefined) return false;
+        return String(value).toLowerCase().includes(searchLower);
+      });
+    });
+  }, [data, searchText]);
+
+  // Scroll to newly auto-selected rows (for Insurer table when CBL row is clicked)
+  useEffect(() => {
+    if (
+      fileType === 2 &&
+      externalSelectedRows.length > 0 &&
+      tableWrapperRef.current
+    ) {
+      const previousRows = previousExternalSelectedRowsRef.current;
+      const newlySelectedRows = externalSelectedRows.filter(
+        (rowId) => !previousRows.includes(rowId)
+      );
+
+      if (newlySelectedRows.length > 0) {
+        // Find the first newly selected row in the DOM and scroll to it
+        setTimeout(() => {
+          const firstNewRowId = newlySelectedRows[0];
+          // Try multiple selectors as Ant Design might use different attributes
+          const rowElement =
+            (tableWrapperRef.current?.querySelector(
+              `tr[data-row-key="${firstNewRowId}"]`
+            ) as HTMLElement) ||
+            (tableWrapperRef.current?.querySelector(
+              `.ant-table-tbody tr[data-row-key="${firstNewRowId}"]`
+            ) as HTMLElement) ||
+            (tableWrapperRef.current?.querySelector(
+              `.consistent-height-table tr[data-row-key="${firstNewRowId}"]`
+            ) as HTMLElement);
+
+          if (rowElement) {
+            // Find the scrollable container (Ant Design table body)
+            const scrollContainer = tableWrapperRef.current?.querySelector(
+              ".ant-table-body"
+            ) as HTMLElement;
+
+            if (scrollContainer) {
+              // Calculate the position relative to the scroll container
+              const rowRect = rowElement.getBoundingClientRect();
+              const containerRect = scrollContainer.getBoundingClientRect();
+              const scrollTop =
+                scrollContainer.scrollTop +
+                (rowRect.top - containerRect.top) -
+                containerRect.height / 2 +
+                rowRect.height / 2;
+
+              scrollContainer.scrollTo({
+                top: scrollTop,
+                behavior: "smooth",
+              });
+            } else {
+              // Fallback to scrollIntoView if scroll container not found
+              rowElement.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+              });
+            }
+          }
+        }, 150); // Small delay to ensure DOM is updated
+      }
+    }
+
+    // Update the ref with current external selected rows
+    previousExternalSelectedRowsRef.current = [...externalSelectedRows];
+  }, [externalSelectedRows, fileType]);
 
   // Clear all selections when clearSelections prop is true
   useEffect(() => {
@@ -255,6 +398,7 @@ function MatchableDataTable({
 
       setSelectedRows([]);
       setManuallySelectedRows([]);
+      previousExternalSelectedRowsRef.current = [];
       if (setSelectedRowData) {
         setSelectedRowData([]);
       }
@@ -441,33 +585,15 @@ function MatchableDataTable({
     setPreviousDataLength(data.length);
   }, [data.length, previousDataLength, setSelectedRowData]);
 
-  // console.log("cblColumnMappings", cblColumnMappings);
-  // Calculate sum whenever selectedRows changes
-  useEffect(() => {
-    const selectedData = data.filter((row) =>
-      selectedRows.includes(row.row_id_1)
-    );
+  // Calculate subtotal of selected rows
+  const selectedRowsSubtotal = useMemo(() => {
+    const selectedData = data.filter((row) => selectedRows.includes(row.idx));
 
-    if (fileType === 1) {
-      const total = selectedData.reduce((acc, row) => {
-        const amount = isNaN(row["processedAmount"])
-          ? 0
-          : row["processedAmount"];
-        // console.log("row", amount);
-        // console.log("total", acc + amount);
-        return acc + amount;
-      }, 0);
-      // onSumChange(total);
-    } else if (fileType === 2) {
-      const total = selectedData.reduce((acc, row) => {
-        const amount = isNaN(row["processedAmount"])
-          ? 0
-          : row["processedAmount"];
-        return acc + amount;
-      }, 0);
-      // onSumChange(total);
-    }
-  }, [selectedRows, data, onSumChange, fileType]);
+    return selectedData.reduce((acc, row) => {
+      const amount = parseFloat(row["ProcessedAmount"]) || 0;
+      return acc + amount;
+    }, 0);
+  }, [selectedRows, data]);
 
   // console.log("partialMatches", partialMatches);
   // console.log("selectedRows", selectedRows);
@@ -487,8 +613,9 @@ function MatchableDataTable({
         return;
       }
 
-      // Check if this row was auto-selected
+      // Check if this row was auto-selected or manually deselected
       const isAutoSelected = externalSelectedRows.includes(row.idx);
+      const wasManuallyDeselected = manuallyDeselectedRows.includes(row.idx);
 
       // Toggle selection
       const isCurrentlySelected = selectedRows.includes(row.idx);
@@ -502,8 +629,28 @@ function MatchableDataTable({
         );
         console.log("Removing from manual selection:", row.idx);
         setManuallySelectedRows(newManualSelection);
-      } else if (!isAutoSelected) {
-        // Add to manual selection (only if not auto-selected)
+      } else if (isAutoSelected) {
+        // Auto-selected row clicked - remove it from auto-selection
+        console.log(
+          "Auto-selected row clicked - removing from auto-selection:",
+          row.idx
+        );
+        if (onRemoveAutoSelection) {
+          onRemoveAutoSelection(row.idx);
+        }
+        return; // Don't add to manual selection, just remove from auto
+      } else if (wasManuallyDeselected) {
+        // Previously auto-selected row that was manually deselected - restore it
+        console.log(
+          "Manually deselected row clicked - restoring to auto-selection:",
+          row.idx
+        );
+        if (onRestoreAutoSelection) {
+          onRestoreAutoSelection(row.idx);
+        }
+        return; // Don't add to manual selection, restore to auto
+      } else {
+        // Regular row - add to manual selection
         const newManualSelection = [...manuallySelectedRows, row.idx];
         console.log("Adding to manual selection:", row.idx);
         setManuallySelectedRows(newManualSelection);
@@ -559,10 +706,13 @@ function MatchableDataTable({
     [
       selectedRows,
       manuallySelectedRows,
+      manuallyDeselectedRows,
       externalSelectedRows,
       fileType,
       setSelectedRowData,
       onRowSelection,
+      onRemoveAutoSelection,
+      onRestoreAutoSelection,
       calculateTargetRowIndices,
     ]
   );
@@ -572,25 +722,247 @@ function MatchableDataTable({
     (record: any) => {
       const isSelected = selectedRows.includes(record.idx);
       const isAutoSelected = externalSelectedRows.includes(record.idx);
+      const isManuallySelected = manuallySelectedRows.includes(record.idx);
+      const wasManuallyDeselected = manuallyDeselectedRows.includes(record.idx);
       const isEmptyRow = Object.values(record).every((value) => value === "");
 
       if (isSelected) {
         console.log(`Row ${record.idx} is highlighted as selected`);
-        if (isAutoSelected) {
-          return "auto-selected-row";
+        // Prioritize manual selection over auto-selection for styling
+        if (isManuallySelected) {
+          return "selected-row"; // Blue highlighting for manual selection
+        } else if (isAutoSelected) {
+          return "auto-selected-row"; // Green highlighting for auto-selection only
         }
-        return "selected-row";
+        return "selected-row"; // Default to manual selection styling
+      }
+      if (wasManuallyDeselected) {
+        return "manually-deselected-row"; // Gray with dashed border - can be restored
       }
       if (isEmptyRow) {
         return "empty-row";
       }
       return "";
     },
-    [selectedRows, externalSelectedRows]
+    [
+      selectedRows,
+      externalSelectedRows,
+      manuallySelectedRows,
+      manuallyDeselectedRows,
+    ]
   );
 
+  // Function to navigate to a specific row by ID
+  const navigateToRow = useCallback((rowId: string) => {
+    if (!tableWrapperRef.current) {
+      return;
+    }
+
+    setTimeout(() => {
+      // Try multiple selectors to find the row
+      const rowElement =
+        (tableWrapperRef.current?.querySelector(
+          `tr[data-row-key="${rowId}"]`
+        ) as HTMLElement) ||
+        (tableWrapperRef.current?.querySelector(
+          `.ant-table-tbody tr[data-row-key="${rowId}"]`
+        ) as HTMLElement) ||
+        (tableWrapperRef.current?.querySelector(
+          `.consistent-height-table tr[data-row-key="${rowId}"]`
+        ) as HTMLElement);
+
+      if (rowElement) {
+        // Find the scrollable container (Ant Design table body)
+        const scrollContainer = tableWrapperRef.current?.querySelector(
+          ".ant-table-body"
+        ) as HTMLElement;
+
+        if (scrollContainer) {
+          // Calculate the position relative to the scroll container
+          const rowRect = rowElement.getBoundingClientRect();
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const scrollTop =
+            scrollContainer.scrollTop +
+            (rowRect.top - containerRect.top) -
+            containerRect.height / 2 +
+            rowRect.height / 2;
+
+          scrollContainer.scrollTo({
+            top: scrollTop,
+            behavior: "smooth",
+          });
+        } else {
+          // Fallback to scrollIntoView if scroll container not found
+          rowElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+      }
+    }, 100);
+  }, []);
+
+  // Navigate to next selected row
+  const navigateToNext = useCallback(() => {
+    if (selectedRows.length === 0) return;
+
+    // If at initial state (-1), go to first row (index 0)
+    const nextIndex =
+      currentNavigationIndex < 0
+        ? 0
+        : currentNavigationIndex < selectedRows.length - 1
+        ? currentNavigationIndex + 1
+        : currentNavigationIndex; // Don't wrap, stay at last
+    setCurrentNavigationIndex(nextIndex);
+    navigateToRow(selectedRows[nextIndex]);
+  }, [selectedRows, currentNavigationIndex, navigateToRow]);
+
+  // Navigate to previous selected row
+  const navigateToPrevious = useCallback(() => {
+    if (selectedRows.length === 0) return;
+
+    // If at initial state (-1), go to last row
+    const prevIndex =
+      currentNavigationIndex < 0
+        ? selectedRows.length - 1
+        : currentNavigationIndex > 0
+        ? currentNavigationIndex - 1
+        : currentNavigationIndex; // Don't wrap, stay at first
+    setCurrentNavigationIndex(prevIndex);
+    navigateToRow(selectedRows[prevIndex]);
+  }, [selectedRows, currentNavigationIndex, navigateToRow]);
+
+  // Reset navigation index when selections change
+  useEffect(() => {
+    if (selectedRows.length === 0) {
+      setCurrentNavigationIndex(-1);
+    } else if (
+      currentNavigationIndex < 0 ||
+      currentNavigationIndex >= selectedRows.length
+    ) {
+      // Initialize to first row (index 0) when selections are made
+      setCurrentNavigationIndex(0);
+      // Auto-navigate to first selected row
+      if (selectedRows.length > 0) {
+        navigateToRow(selectedRows[0]);
+      }
+    }
+  }, [
+    selectedRows.length,
+    currentNavigationIndex,
+    selectedRows,
+    navigateToRow,
+  ]);
+
   return (
-    <div>
+    <div ref={tableWrapperRef}>
+      {/* Search Input and Navigation */}
+      <div
+        style={{
+          margin: "8px",
+          marginBottom: "12px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <Input
+          placeholder={
+            fileType === 1
+              ? "Search in CBL table..."
+              : "Search in Insurer table..."
+          }
+          prefix={<SearchOutlined />}
+          value={searchText}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          allowClear
+          style={{
+            maxWidth: "300px",
+          }}
+        />
+        {selectedRows.length > 0 && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <Tooltip title="Navigate to previous selected row">
+                <Button
+                  type="default"
+                  icon={<UpOutlined />}
+                  size="small"
+                  onClick={navigateToPrevious}
+                  disabled={
+                    selectedRows.length === 0 ||
+                    (currentNavigationIndex >= 0 &&
+                      currentNavigationIndex === 0)
+                  }
+                />
+              </Tooltip>
+              <Tooltip
+                title={`${selectedRows.length} selected row${
+                  selectedRows.length > 1 ? "s" : ""
+                }`}
+              >
+                <span
+                  style={{
+                    fontSize: "12px",
+                    color: "#666",
+                    padding: "0 8px",
+                    minWidth: "60px",
+                    textAlign: "center",
+                  }}
+                >
+                  {currentNavigationIndex >= 0
+                    ? `${currentNavigationIndex + 1}/${selectedRows.length}`
+                    : `1/${selectedRows.length}`}
+                </span>
+              </Tooltip>
+              <Tooltip title="Navigate to next selected row">
+                <Button
+                  type="default"
+                  icon={<DownOutlined />}
+                  size="small"
+                  onClick={navigateToNext}
+                  disabled={
+                    selectedRows.length === 0 ||
+                    (currentNavigationIndex >= 0 &&
+                      currentNavigationIndex === selectedRows.length - 1)
+                  }
+                />
+              </Tooltip>
+            </div>
+            <Tooltip title="Subtotal of selected rows">
+              <span
+                style={{
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  color: "#1890ff",
+                  padding: "4px 12px",
+                  backgroundColor: "#e6f7ff",
+                  borderRadius: "4px",
+                  border: "1px solid #91d5ff",
+                }}
+              >
+                Subtotal: Rs{" "}
+                {selectedRowsSubtotal.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            </Tooltip>
+          </>
+        )}
+        {searchText && (
+          <span
+            style={{
+              marginLeft: "8px",
+              fontSize: "12px",
+              color: "#666",
+            }}
+          >
+            Showing {filteredData.length} of {data.length} rows
+          </span>
+        )}
+      </div>
+
       {hiddenColumns.size > 0 && (
         <div
           style={{
@@ -625,13 +997,14 @@ function MatchableDataTable({
       )}
       <Table
         columns={resizableColumns}
-        dataSource={data}
+        dataSource={filteredData}
+        rowKey="idx"
         components={{
           header: {
             cell: ResizableTitle,
           },
         }}
-        scroll={{ x: "max-content" }}
+        scroll={{ x: "max-content", y: 600 }}
         size="small"
         bordered
         className="consistent-height-table"
@@ -640,8 +1013,26 @@ function MatchableDataTable({
           onClick: () => handleRowClicked(row),
         })}
         pagination={{
-          showSizeChanger: false,
+          current: currentPage,
+          pageSize: pageSize,
+          showSizeChanger: true,
+          pageSizeOptions: ["10", "20", "50", "100", "200", "500"],
+          showQuickJumper: true,
+          showTotal: (total, range) =>
+            `${range[0]}-${range[1]} of ${total} items`,
+          onChange: (page, size) => {
+            handleCurrentPageChange(page);
+            if (size !== pageSize) {
+              handlePageSizeChange(size);
+              handleCurrentPageChange(1); // Reset to first page when page size changes
+            }
+          },
+          onShowSizeChange: (current, size) => {
+            handlePageSizeChange(size);
+            handleCurrentPageChange(1); // Reset to first page when page size changes
+          },
         }}
+        loading={loading}
       />
     </div>
   );

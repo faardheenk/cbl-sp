@@ -2,9 +2,11 @@ import * as React from "react";
 import * as ReactDom from "react-dom";
 import OnboardingInsurance from "./components/OnboardingInsurance";
 import { BaseClientSideWebPart } from "@microsoft/sp-webpart-base";
-import { getSP } from "../../pnpjsConfig";
+import { getSP, resetSP } from "../../pnpjsConfig";
 import { SpContext } from "../../SpContext";
 import SavedInsuranceMappings from "./components/SavedInsuranceMappings";
+import { ReconciliationProvider } from "../../context/ReconciliationContext";
+import { TaskProvider } from "../../context/TaskContext";
 
 export default class OnboardingInsuranceWebPart extends BaseClientSideWebPart<{}> {
   public async render(): Promise<void> {
@@ -15,7 +17,11 @@ export default class OnboardingInsuranceWebPart extends BaseClientSideWebPart<{}
 
     const element: React.ReactElement = (
       <SpContext.Provider value={{ context: this.context, sp }}>
-        <OnboardingInsurance />
+        <TaskProvider context={this.context}>
+          <ReconciliationProvider>
+            <OnboardingInsurance />
+          </ReconciliationProvider>
+        </TaskProvider>
       </SpContext.Provider>
     );
     ReactDom.render(element, this.domElement);
@@ -47,5 +53,6 @@ export default class OnboardingInsuranceWebPart extends BaseClientSideWebPart<{}
 
   protected onDispose(): void {
     ReactDom.unmountComponentAtNode(this.domElement);
+    resetSP(); // Reset SharePoint context when disposing
   }
 }

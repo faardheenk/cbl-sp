@@ -4,7 +4,7 @@ import styles from "./Landing.module.scss";
 import { Container, Card, Badge } from "react-bootstrap";
 
 import Header from "../../common/Header";
-import { useTasks } from "../../../context/TaskContext";
+import { useTasks, Task } from "../../../context/TaskContext";
 import { useSpContext } from "../../../SpContext";
 import { IFolderInfo } from "@pnp/sp/folders";
 
@@ -23,6 +23,7 @@ const Landing = () => {
 
   const { context, sp } = useSpContext();
   const { tasks, setTasks } = useTasks();
+  const [isLoading, setIsLoading] = useState(false);
 
   const formatDate = (dateStr: string) => {
     const [year, month, day] = dateStr.split("_");
@@ -34,14 +35,7 @@ const Landing = () => {
     });
   };
 
-  type DataType = {
-    date: string;
-    insurance: string;
-    status: string;
-    url: string;
-  };
-
-  const columns: TableProps<DataType>["columns"] = [
+  const columns: TableProps<any>["columns"] = [
     {
       title: "Date",
       dataIndex: "date",
@@ -77,7 +71,14 @@ const Landing = () => {
   ];
 
   const fetchTasks = async () => {
+    // Guard clause to ensure sp is available
+    if (!sp) {
+      console.log("SharePoint context not ready in Landing component");
+      return;
+    }
+
     try {
+      setIsLoading(true);
       // Get the document library
       const docLib = await sp.web.lists.getByTitle("Reconciliation Library");
 
@@ -96,6 +97,7 @@ const Landing = () => {
             const subFolders = await sp.web
               .getFolderByServerRelativePath(folder.ServerRelativeUrl)
               .folders();
+            console.log("SUB FOLDERS >>> ", subFolders);
 
             return await Promise.all(
               subFolders
@@ -119,6 +121,7 @@ const Landing = () => {
                       | "Completed"
                       | "Failed",
                     url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx?Insurance=${insuranceName}&Date=${dateFolder.Name}`,
+                    createdDate: new Date(dateFolder.TimeCreated),
                   };
                 })
             );
@@ -130,6 +133,7 @@ const Landing = () => {
                 insurance: insuranceName,
                 status: "Pending" as const,
                 url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx?Insurance=${insuranceName}`,
+                createdDate: new Date(), // Use current date as fallback
               },
             ];
           }
@@ -142,18 +146,29 @@ const Landing = () => {
         []
       );
 
-      // Sort tasks by date in descending order
-      transformedTasks.sort((a, b) => b.date.localeCompare(a.date));
+      // Sort tasks by creation date in descending order (newest first)
+      transformedTasks.sort(
+        (a, b) => b.createdDate.getTime() - a.createdDate.getTime()
+      );
 
       setTasks(transformedTasks);
     } catch (error) {
       console.error("Error fetching from Reconciliation Library:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    // Only fetch tasks if sp context is available
+    if (sp) {
+      fetchTasks().catch((error) => {
+        console.error("Failed to fetch tasks:", error);
+      });
+    } else {
+      console.log("Waiting for SharePoint context to be ready...");
+    }
+  }, [sp]);
 
   const badgeVariant = (status: string) => {
     if (status === "Completed") return "success";
@@ -182,7 +197,12 @@ const Landing = () => {
         }}
       >
         <div style={{ overflowX: "auto", padding: "1rem" }}>
-          <Table columns={columns} dataSource={tasks} size="small"/>
+          <Table
+            columns={columns}
+            dataSource={tasks}
+            size="small"
+            loading={isLoading}
+          />
         </div>
       </Card>
     </Container>

@@ -153,7 +153,7 @@ function Datatable({
           onColumnOrderChange={(cols) => {}}
           columns={columns}
           data={filteredItems}
-          pagination
+          pagination={false}
           pointerOnHover
           responsive
           fixedHeader

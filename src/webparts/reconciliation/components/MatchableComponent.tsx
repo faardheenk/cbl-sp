@@ -10,6 +10,7 @@ type MatchableComponentProps = {
   title?: string;
   type: "exact" | "partial" | "no-match";
   clearSelections?: boolean;
+  loading?: boolean;
 };
 
 function MatchableComponent({
@@ -17,6 +18,7 @@ function MatchableComponent({
   title,
   type,
   clearSelections = false,
+  loading = false,
 }: MatchableComponentProps) {
   const {
     exactMatchCBL,
@@ -111,6 +113,20 @@ function MatchableComponent({
     Map<string, string[]>
   >(new Map());
 
+  // Track which auto-selected rows were manually deselected by the user
+  const [manuallyDeselectedRows, setManuallyDeselectedRows] = useState<
+    Set<string>
+  >(new Set());
+
+  // Shared search state for cross-table search
+  const [sharedSearchText, setSharedSearchText] = useState<string>("");
+
+  // Shared page size state for cross-table pagination
+  const [sharedPageSize, setSharedPageSize] = useState<number>(50);
+
+  // Shared current page state for cross-table pagination
+  const [sharedCurrentPage, setSharedCurrentPage] = useState<number>(1);
+
   // Clear cross-table selections when clearSelections prop is true
   useEffect(() => {
     if (clearSelections || clearAllSelections) {
@@ -128,6 +144,7 @@ function MatchableComponent({
 
       setAutoSelectedInsurerRows([]);
       setCblSelectionMappings(new Map());
+      setManuallyDeselectedRows(new Set());
 
       console.log("After clearing - forced cross-table selections to empty");
     }
@@ -182,8 +199,10 @@ function MatchableComponent({
         allAutoSelectedRows.push(...insurerRows);
       });
 
-      // Remove duplicates
-      const uniqueAutoSelectedRows = Array.from(new Set(allAutoSelectedRows));
+      // Remove duplicates and filter out manually deselected rows
+      const uniqueAutoSelectedRows = Array.from(
+        new Set(allAutoSelectedRows)
+      ).filter((rowId) => !manuallyDeselectedRows.has(rowId));
 
       console.log(
         "Updated auto-selected Insurer rows:",
@@ -209,6 +228,47 @@ function MatchableComponent({
 
     // If user manually deselects auto-selected rows, we might want to handle this
     // For now, we'll allow the manual override without affecting CBL selection
+  };
+
+  // Handler for removing specific auto-selected rows
+  const handleRemoveAutoSelection = (rowId: string) => {
+    console.log("Removing auto-selected row:", rowId);
+
+    // Mark this row as manually deselected
+    const newManuallyDeselected = new Set(manuallyDeselectedRows);
+    newManuallyDeselected.add(rowId);
+    setManuallyDeselectedRows(newManuallyDeselected);
+
+    // Remove from current auto-selected list
+    const newAutoSelected = autoSelectedInsurerRows.filter(
+      (id) => id !== rowId
+    );
+    setAutoSelectedInsurerRows(newAutoSelected);
+
+    console.log("Row marked as manually deselected:", rowId);
+  };
+
+  // Handler for re-selecting a manually deselected row
+  const handleRestoreAutoSelection = (rowId: string) => {
+    console.log("Restoring auto-selected row:", rowId);
+
+    // Remove from manually deselected set
+    const newManuallyDeselected = new Set(manuallyDeselectedRows);
+    newManuallyDeselected.delete(rowId);
+    setManuallyDeselectedRows(newManuallyDeselected);
+
+    // Check if this row should be auto-selected based on current CBL mappings
+    const allMappedRows: string[] = [];
+    Array.from(cblSelectionMappings.values()).forEach((rows) => {
+      allMappedRows.push(...rows);
+    });
+    const shouldBeAutoSelected = allMappedRows.includes(rowId);
+
+    if (shouldBeAutoSelected && !autoSelectedInsurerRows.includes(rowId)) {
+      const newAutoSelected = [...autoSelectedInsurerRows, rowId];
+      setAutoSelectedInsurerRows(newAutoSelected);
+      console.log("Row restored to auto-selection:", rowId);
+    }
   };
 
   return (
@@ -262,6 +322,13 @@ function MatchableComponent({
                   columns={cblColumns}
                   onRowSelection={handleRowSelection}
                   clearSelections={clearSelections || clearAllSelections}
+                  loading={loading}
+                  searchText={sharedSearchText}
+                  onSearchChange={setSharedSearchText}
+                  pageSize={sharedPageSize}
+                  onPageSizeChange={setSharedPageSize}
+                  currentPage={sharedCurrentPage}
+                  onCurrentPageChange={setSharedCurrentPage}
                 />
               </div>
             </div>
@@ -303,7 +370,17 @@ function MatchableComponent({
                   columns={insurerColumns}
                   externalSelectedRows={autoSelectedInsurerRows}
                   onRowSelection={handleInsurerRowSelection}
+                  onRemoveAutoSelection={handleRemoveAutoSelection}
+                  onRestoreAutoSelection={handleRestoreAutoSelection}
+                  manuallyDeselectedRows={Array.from(manuallyDeselectedRows)}
                   clearSelections={clearSelections || clearAllSelections}
+                  loading={loading}
+                  searchText={sharedSearchText}
+                  onSearchChange={setSharedSearchText}
+                  pageSize={sharedPageSize}
+                  onPageSizeChange={setSharedPageSize}
+                  currentPage={sharedCurrentPage}
+                  onCurrentPageChange={setSharedCurrentPage}
                 />
               </div>
             </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Form, Button, Row, Col } from "react-bootstrap";
+import { Modal, Form, Row, Col, Button, Spinner } from "react-bootstrap";
 import styles from "./UploadModal.module.scss";
 import { uploadExcelFiles } from "../../lib/uploadFiles";
 import { useSpContext } from "../../SpContext";
@@ -39,6 +39,7 @@ const UploadModal: React.FC<UploadModalProps> = ({
   const { dispatchToast } = useToastController(toasterId);
   const [insuranceNames, setInsuranceNames] = useState<string[]>([]);
   const [selectedInsurance, setSelectedInsurance] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const fetchInsuranceNames = async () => {
     const data = await sp.web.lists
@@ -133,6 +134,7 @@ const UploadModal: React.FC<UploadModalProps> = ({
           insurance: selectedInsurance,
           status: "Pending",
           url: `${context.pageContext.web.absoluteUrl}/SitePages/Reconciliation.aspx?Insurance=${selectedInsurance}`,
+          createdDate: new Date(), // Use current date for newly created tasks
         },
       ]);
 
@@ -229,25 +231,39 @@ const UploadModal: React.FC<UploadModalProps> = ({
                 </Form.Group>
               </Col>
             </Row>
-            <div className="d-flex justify-content-end">
+            <div className="d-flex justify-content-end gap-2">
               <Button
-                variant="light"
+                size="sm"
                 onClick={handleClose}
-                className={styles.cancelButton}
+                className="p-2"
+                variant="outline-primary"
               >
-                <i className="bi bi-x-circle me-1" /> Cancel
+                Cancel
               </Button>
               <Button
-                type="button"
-                disabled={!file1 || !file2}
+                size="sm"
+                className="p-2 d-flex align-items-center"
+                disabled={!file1 || !file2 || isLoading}
                 onClick={async () => {
+                  setIsLoading(true);
                   setShowLoader(true);
                   await handleUpload(file1, file2, selectedInsurance);
                   handleClose();
+                  setIsLoading(false);
                 }}
-                className={styles.uploadButton}
               >
-                <i className="bi bi-cloud-arrow-up me-1" /> Upload
+                {isLoading && (
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      height: "1rem",
+                    }}
+                  >
+                    <Spinner size="sm" className="me-2" />
+                  </span>
+                )}
+                Upload
               </Button>
             </div>
           </>

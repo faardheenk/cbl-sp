@@ -2,11 +2,12 @@ import { WebPartContext } from "@microsoft/sp-webpart-base";
 import React, { createContext, useContext, useState } from "react";
 // import { useSpContext } from "../SpContext";
 
-interface Task {
+export interface Task {
   date: string;
   insurance: string;
   status: "Pending" | "In Progress" | "Manual Review" | "Completed" | "Failed";
   url: string;
+  createdDate: Date;
 }
 
 interface TaskContextType {
