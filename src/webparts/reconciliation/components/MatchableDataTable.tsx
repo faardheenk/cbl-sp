@@ -782,16 +782,70 @@ function MatchableDataTable({
 
       // Handle CBL table (fileType 1) automatic highlighting logic
       if (fileType === 1) {
-        if (!isCurrentlySelected && onRowSelection) {
-          // Selecting a CBL row - trigger automatic highlighting
-          const targetIndices = calculateTargetRowIndices(row);
-
-          if (targetIndices.length > 0) {
-            onRowSelection(targetIndices, fileType, row.idx, false);
+        // Get the group_id from the clicked row
+        const groupId = row.group_id;
+        
+        if (groupId !== undefined && groupId !== null && groupId !== "") {
+          // Find all rows with the same group_id (excluding the clicked row)
+          const rowsWithSameGroup = data.filter(
+            (r) => 
+              r.idx !== row.idx && 
+              r.group_id === groupId && 
+              r.ProcessedAmount !== ""
+          );
+          
+          if (!isCurrentlySelected) {
+            // Selecting a CBL row - auto-select all OTHER rows with the same group_id
+            const groupRowIndices = rowsWithSameGroup.map((r) => r.idx);
+            
+            // Add all other group rows to manual selection (excluding already selected ones)
+            const newManualSelection = [
+              ...manuallySelectedRows,
+              ...groupRowIndices.filter((idx) => !manuallySelectedRows.includes(idx) && !selectedRows.includes(idx))
+            ];
+            setManuallySelectedRows(newManualSelection);
+            
+            // Update global selected row data for all other group rows
+            if (setSelectedRowData) {
+              setSelectedRowData((prev) => {
+                const existingIndices = new Set(prev.map((r) => r.idx));
+                const newRows = rowsWithSameGroup
+                  .filter((r) => !existingIndices.has(r.idx))
+                  .map((r) => ({ ...r, match_condition: "manual match" }));
+                return [...prev, ...newRows];
+              });
+            }
+          } else {
+            // Deselecting a CBL row - deselect all OTHER rows with the same group_id
+            const groupRowIndices = rowsWithSameGroup.map((r) => r.idx);
+            
+            // Remove all other group rows from manual selection
+            const newManualSelection = manuallySelectedRows.filter(
+              (id) => !groupRowIndices.includes(id)
+            );
+            setManuallySelectedRows(newManualSelection);
+            
+            // Remove other group rows from global selected row data
+            if (setSelectedRowData) {
+              setSelectedRowData((prev) => 
+                prev.filter((r) => !groupRowIndices.includes(r.idx))
+              );
+            }
           }
-        } else if (isCurrentlySelected && onRowSelection) {
-          // Deselecting a CBL row - clear automatic highlighting
-          onRowSelection([], fileType, row.idx, true);
+        }
+        
+        // Handle Insurer row auto-selection using matched_insurer_indices
+        if (onRowSelection) {
+          if (!isCurrentlySelected) {
+            // Selecting a CBL row - trigger automatic highlighting for Insurer rows
+            const targetIndices = calculateTargetRowIndices(row);
+            if (targetIndices.length > 0) {
+              onRowSelection(targetIndices, fileType, row.idx, false);
+            }
+          } else {
+            // Deselecting a CBL row - clear automatic highlighting for Insurer rows
+            onRowSelection([], fileType, row.idx, true);
+          }
         }
       }
     },
