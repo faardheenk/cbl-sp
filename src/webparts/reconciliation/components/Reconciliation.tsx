@@ -309,7 +309,10 @@ function Reconciliation() {
         console.log("[Initial Render] Exact Match CBL:", exactMatchCBL);
         console.log("[Initial Render] Exact Match Insurer:", exactMatchInsurer);
         console.log("[Initial Render] Partial Match CBL:", partialMatchCBL);
-        console.log("[Initial Render] Partial Match Insurer:", partialMatchInsurer);
+        console.log(
+          "[Initial Render] Partial Match Insurer:",
+          partialMatchInsurer,
+        );
         console.log("[Initial Render] No Match CBL:", noMatchCBL);
         console.log("[Initial Render] No Match Insurer:", noMatchInsurer);
         setExactMatchCBL(exactMatchCBL);
@@ -393,6 +396,13 @@ function Reconciliation() {
     noMatchCBL,
     noMatchInsurer,
   ]);
+
+  useEffect(() => {
+    console.log("[Updated] Partial Match CBL:", partialMatchCBL);
+    console.log("[Updated] Partial Match Insurer:", partialMatchInsurer);
+    console.log("[Updated] No Match CBL:", noMatchCBL);
+    console.log("[Updated] No Match Insurer:", noMatchInsurer);
+  }, [partialMatchCBL, partialMatchInsurer, noMatchCBL, noMatchInsurer]);
 
   // Unified function to move rows between sections
   const moveRows = useCallback(
@@ -951,28 +961,13 @@ function Reconciliation() {
           (idx) => !selectedRowCBL.some((selected) => selected.idx === idx),
         );
 
-        // For insurer, get deselected rows ONLY from deselected CBL rows
-        // Only insurer rows that correspond to deselected CBL rows should be considered deselected
-        const deselectedInsurerRows: string[] = [];
-
-        deselectedCBLRows.forEach((deselectedCBLIdx) => {
-          const deselectedCBLRow = partialMatchCBL.find(
-            (row) => row.idx === deselectedCBLIdx,
-          );
-          if (!deselectedCBLRow) {
-            return;
-          }
-
-          const targetIdxs = getTargetInsurerIdxs(deselectedCBLRow);
-          targetIdxs.forEach((insurerRowIdx) => {
-            if (
-              partialMatchInsurer.some((row) => row.idx === insurerRowIdx) &&
-              !selectedRowInsurer.some((selected) => selected.idx === insurerRowIdx)
-            ) {
-              deselectedInsurerRows.push(insurerRowIdx);
-            }
-          });
-        });
+        // For insurer, deselected rows are any rows in selected groups
+        // that are not currently selected (manual deselections).
+        const deselectedInsurerRows = Array.from(
+          allInsurerRowsInSelectedGroups,
+        ).filter(
+          (idx) => !selectedRowInsurer.some((selected) => selected.idx === idx),
+        );
 
         // Remove duplicates
         const uniqueDeselectedInsurerRows = Array.from(
@@ -986,10 +981,7 @@ function Reconciliation() {
           .map((idx) => partialMatchInsurer.find((row) => row.idx === idx))
           .filter(Boolean);
 
-        console.log(
-          "[Selection] Selected CBL rows (objects):",
-          selectedRowCBL,
-        );
+        console.log("[Selection] Selected CBL rows (objects):", selectedRowCBL);
         console.log(
           "[Selection] Selected Insurer rows (objects):",
           selectedRowInsurer,

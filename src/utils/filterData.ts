@@ -17,7 +17,7 @@ export const filterData = (postfix: string, data: any[]): any[] => {
 
 export const regenerateIdx = (
   data: any[],
-  type: "exact" | "partial" | "no-match" = "no-match"
+  type: "exact" | "partial" | "no-match" = "no-match",
 ): any[] => {
   return data.map((row, index) => {
     const prefix =
@@ -29,7 +29,7 @@ export const regenerateIdx = (
 
 export const splitData = (
   data: any[],
-  group: string
+  group: string,
 ): { cbl: any[]; insurer: any[] } => {
   const cbl: any[] = [];
   const insurer: any[] = [];
@@ -66,8 +66,8 @@ export const mergeData = (cbl: any[], insurer: any[]): any[] => {
         (cblRow.idx.startsWith("EM-")
           ? "EM-" + index
           : cblRow.idx.startsWith("PM-")
-          ? "PM-" + index
-          : "NM-" + index)
+            ? "PM-" + index
+            : "NM-" + index),
     );
 
     // Add insurance name as postfix to insurer properties
