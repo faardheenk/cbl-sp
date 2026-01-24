@@ -15,6 +15,8 @@ import {
   UpOutlined,
   DownOutlined,
   MoreOutlined,
+  CloseOutlined,
+  LinkOutlined,
 } from "@ant-design/icons";
 import "react-resizable/css/styles.css";
 
@@ -198,7 +200,7 @@ type Props = {
     selectedRowIndices: string[],
     sourceFileType: 1 | 2,
     sourceRowId?: string,
-    isDeselection?: boolean
+    isDeselection?: boolean,
   ) => void;
   onRemoveAutoSelection?: (rowId: string) => void;
   onRestoreAutoSelection?: (rowId: string) => void;
@@ -217,6 +219,11 @@ type Props = {
   onUnmatch?: () => void;
   onMoveToExactMatch?: () => void;
   onMoveToPartialMatch?: () => void;
+  // Scroll synchronization props
+  syncScrollEnabled?: boolean;
+  onSyncScrollChange?: (enabled: boolean) => void;
+  onScroll?: (scrollTop: number) => void;
+  externalScrollTop?: number;
 };
 
 // Resizable title component with hide button
@@ -315,10 +322,14 @@ function MatchableDataTable({
   onUnmatch,
   onMoveToExactMatch,
   onMoveToPartialMatch,
+  syncScrollEnabled = false,
+  onSyncScrollChange,
+  onScroll,
+  externalScrollTop,
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [previousDataLength, setPreviousDataLength] = useState<number>(
-    data.length
+    data.length,
   );
   // Use external search text if provided, otherwise use local state
   const [localSearchText, setLocalSearchText] = useState<string>("");
@@ -328,8 +339,12 @@ function MatchableDataTable({
 
   // Track which rows were auto-selected vs manually selected
   const [manuallySelectedRows, setManuallySelectedRows] = useState<string[]>(
-    []
+    [],
   );
+
+  // Track manually deselected rows (rows that were selected but user manually unselected)
+  const [manuallyDeselectedRowsLocal, setManuallyDeselectedRowsLocal] =
+    useState<string[]>([]);
 
   // Ref for table wrapper to enable scrolling
   const tableWrapperRef = useRef<HTMLDivElement>(null);
@@ -372,7 +387,7 @@ function MatchableDataTable({
     ) {
       const previousRows = previousExternalSelectedRowsRef.current;
       const newlySelectedRows = externalSelectedRows.filter(
-        (rowId) => !previousRows.includes(rowId)
+        (rowId) => !previousRows.includes(rowId),
       );
 
       if (newlySelectedRows.length > 0) {
@@ -382,19 +397,19 @@ function MatchableDataTable({
           // Try multiple selectors as Ant Design might use different attributes
           const rowElement =
             (tableWrapperRef.current?.querySelector(
-              `tr[data-row-key="${firstNewRowId}"]`
+              `tr[data-row-key="${firstNewRowId}"]`,
             ) as HTMLElement) ||
             (tableWrapperRef.current?.querySelector(
-              `.ant-table-tbody tr[data-row-key="${firstNewRowId}"]`
+              `.ant-table-tbody tr[data-row-key="${firstNewRowId}"]`,
             ) as HTMLElement) ||
             (tableWrapperRef.current?.querySelector(
-              `.consistent-height-table tr[data-row-key="${firstNewRowId}"]`
+              `.consistent-height-table tr[data-row-key="${firstNewRowId}"]`,
             ) as HTMLElement);
 
           if (rowElement) {
             // Find the scrollable container (Ant Design table body)
             const scrollContainer = tableWrapperRef.current?.querySelector(
-              ".ant-table-body"
+              ".ant-table-body",
             ) as HTMLElement;
 
             if (scrollContainer) {
@@ -432,12 +447,42 @@ function MatchableDataTable({
     if (clearSelections) {
       setSelectedRows([]);
       setManuallySelectedRows([]);
+      setManuallyDeselectedRowsLocal([]);
       previousExternalSelectedRowsRef.current = [];
       if (setSelectedRowData) {
         setSelectedRowData([]);
       }
     }
   }, [clearSelections, setSelectedRowData, fileType]);
+
+  // Log manually deselected rows to console
+  useEffect(() => {
+    const sideName = fileType === 1 ? "CBL" : "Insurer";
+    if (manuallyDeselectedRowsLocal.length > 0) {
+      console.log(
+        `[Manually Deselected Rows - ${sideName}] Total: ${manuallyDeselectedRowsLocal.length}`,
+      );
+      console.log(
+        `[Manually Deselected Rows - ${sideName}] Row IDs:`,
+        manuallyDeselectedRowsLocal,
+      );
+
+      // Also log the actual row data for better visibility
+      const deselectedRowData = data.filter((row) =>
+        manuallyDeselectedRowsLocal.includes(row.idx),
+      );
+      if (deselectedRowData.length > 0) {
+        console.log(
+          `[Manually Deselected Rows - ${sideName}] Row Data:`,
+          deselectedRowData,
+        );
+      }
+    } else {
+      console.log(
+        `[Manually Deselected Rows - ${sideName}] No manually deselected rows`,
+      );
+    }
+  }, [manuallyDeselectedRowsLocal, fileType, data]);
 
   // Update selected rows when external selection changes
   useEffect(() => {
@@ -449,10 +494,10 @@ function MatchableDataTable({
       // Use Set comparison to avoid sort mutation issues
       const currentSet = new Set(prevSelectedRows);
       const newSet = new Set(newSelectedRows);
-      
-      const setsAreEqual = 
-        currentSet.size === newSet.size && 
-        Array.from(currentSet).every(item => newSet.has(item));
+
+      const setsAreEqual =
+        currentSet.size === newSet.size &&
+        Array.from(currentSet).every((item) => newSet.has(item));
 
       // Only update if selection actually changed
       if (!setsAreEqual) {
@@ -464,7 +509,7 @@ function MatchableDataTable({
     // Update the global selected row data for auto-selected rows
     if (setSelectedRowData) {
       const selectedData = data.filter((row) =>
-        externalSelectedRows.includes(row.idx)
+        externalSelectedRows.includes(row.idx),
       );
       const autoSelectedData = selectedData.map((row) => ({
         ...row,
@@ -474,7 +519,7 @@ function MatchableDataTable({
       setSelectedRowData((prevData) => {
         // Remove any existing auto-selected rows and add new ones
         const manualData = prevData.filter(
-          (row) => row.match_condition !== "auto match"
+          (row) => row.match_condition !== "auto match",
         );
         const newData = [...manualData, ...autoSelectedData];
 
@@ -485,56 +530,79 @@ function MatchableDataTable({
         return prevData;
       });
     }
-  }, [
-    externalSelectedRows,
-    manuallySelectedRows,
-    data,
-    setSelectedRowData,
-  ]);
+  }, [externalSelectedRows, manuallySelectedRows, data, setSelectedRowData]);
 
   // Helper function to parse matched_insurer_indices and calculate target row indices
-  const calculateTargetRowIndices = useCallback((row: any): string[] => {
-    if (
-      !row.matched_insurer_indices ||
-      typeof row.matched_insurer_indices !== "string"
-    ) {
-      return [];
-    }
-
-    try {
-      // Parse the string into an array
-      const indices = JSON.parse(row.matched_insurer_indices);
-      if (!Array.isArray(indices)) {
+  const calculateTargetRowIndices = useCallback(
+    (row: any): string[] => {
+      if (
+        !row.matched_insurer_indices ||
+        typeof row.matched_insurer_indices !== "string"
+      ) {
         return [];
       }
 
-      // Get the current row's idx and extract the numeric part
-      const currentIdx = row.idx;
-      const currentNumericPart = currentIdx.replace(/[^0-9]/g, "");
-      const baseIndex = parseInt(currentNumericPart, 10);
+      try {
+        // Parse the string into an array
+        const indices = JSON.parse(row.matched_insurer_indices);
+        if (!Array.isArray(indices)) {
+          return [];
+        }
 
-      if (isNaN(baseIndex)) {
-        return [];
-      }
-
-      // Calculate target indices based on the array length and base index
-      const targetIndices: string[] = [];
-      for (let i = 0; i < indices.length; i++) {
-        // Generate target idx with same prefix as current row but incremented number
+        // Get the current row's idx and extract the prefix
+        const currentIdx = row.idx;
         const prefix = currentIdx.replace(/[0-9]+/, "");
-        const targetIdx = `${prefix}${baseIndex + i}`;
-        targetIndices.push(targetIdx);
-      }
 
-      return targetIndices;
-    } catch (error) {
-      return [];
-    }
-  }, []);
+        // Find the FIRST CBL row (lowest index) in the data that has the same matched_insurer_indices
+        // This ensures all CBL rows with the same matched_insurer_indices select the same insurer rows
+        const rowsWithSameIndices = data.filter(
+          (r) => r.matched_insurer_indices === row.matched_insurer_indices,
+        );
+
+        if (rowsWithSameIndices.length === 0) {
+          return [];
+        }
+
+        // Find the row with the lowest numeric index
+        const firstMatchingRow = rowsWithSameIndices.reduce(
+          (first, current) => {
+            const firstNumeric = parseInt(first.idx.replace(/[^0-9]/g, ""), 10);
+            const currentNumeric = parseInt(
+              current.idx.replace(/[^0-9]/g, ""),
+              10,
+            );
+            return currentNumeric < firstNumeric ? current : first;
+          },
+        );
+
+        // Use the first matching row's position as the base
+        const baseRowNumericPart = firstMatchingRow.idx.replace(/[^0-9]/g, "");
+        const baseIndex = parseInt(baseRowNumericPart, 10);
+
+        if (isNaN(baseIndex)) {
+          return [];
+        }
+
+        // Calculate target indices based on the array length and base index
+        // All CBL rows with the same matched_insurer_indices will use the same base index
+        const targetIndices: string[] = [];
+        for (let i = 0; i < indices.length; i++) {
+          // Generate target idx with same prefix as current row but using the base index
+          const targetIdx = `${prefix}${baseIndex + i}`;
+          targetIndices.push(targetIdx);
+        }
+
+        return targetIndices;
+      } catch (error) {
+        return [];
+      }
+    },
+    [data],
+  );
 
   // Initialize column widths - default width of 150px for each column
   const [columnWidths, setColumnWidths] = useState<{ [key: string]: number }>(
-    {}
+    {},
   );
 
   // Track hidden columns
@@ -557,7 +625,7 @@ function MatchableDataTable({
     (index: number) =>
     (e: any, { size }: ResizeCallbackData) => {
       const visibleColumns = columns.filter(
-        (col: any) => !hiddenColumns.has(col.key)
+        (col: any) => !hiddenColumns.has(col.key),
       );
       const newColumnWidths = { ...columnWidths };
       const columnKey = visibleColumns[index]?.key as string;
@@ -576,7 +644,7 @@ function MatchableDataTable({
     // Notify parent component if callback provided
     if (onColumnsChange) {
       const visibleColumns = columns.filter(
-        (col: any) => !newHiddenColumns.has(col.key)
+        (col: any) => !newHiddenColumns.has(col.key),
       );
       onColumnsChange(visibleColumns);
     }
@@ -584,7 +652,7 @@ function MatchableDataTable({
 
   // Create resizable columns (filter out hidden columns)
   const visibleColumns = columns.filter(
-    (col: any) => !hiddenColumns.has(col.key)
+    (col: any) => !hiddenColumns.has(col.key),
   );
   const resizableColumns = visibleColumns.map((col: any, index: number) => ({
     ...col,
@@ -734,133 +802,185 @@ function MatchableDataTable({
       // Check if this row was auto-selected or manually deselected
       const isAutoSelected = externalSelectedRows.includes(row.idx);
       const wasManuallyDeselected = manuallyDeselectedRows.includes(row.idx);
-
-      // Toggle selection
       const isCurrentlySelected = selectedRows.includes(row.idx);
       const isManuallySelected = manuallySelectedRows.includes(row.idx);
 
-      // Update manually selected rows
-      if (isManuallySelected) {
-        // Remove from manual selection
-        const newManualSelection = manuallySelectedRows.filter(
-          (id) => id !== row.idx
-        );
-        setManuallySelectedRows(newManualSelection);
-      } else if (isAutoSelected) {
+      // Handle special cases first (early returns)
+      if (isAutoSelected) {
         // Auto-selected row clicked - remove it from auto-selection
+        // Track this as a manually deselected row
+        const newManuallyDeselected = Array.from(
+          new Set([...manuallyDeselectedRowsLocal, row.idx]),
+        );
+        setManuallyDeselectedRowsLocal(newManuallyDeselected);
+
         if (onRemoveAutoSelection) {
           onRemoveAutoSelection(row.idx);
         }
-        return; // Don't add to manual selection, just remove from auto
-      } else if (wasManuallyDeselected) {
+        return;
+      }
+
+      if (wasManuallyDeselected) {
         // Previously auto-selected row that was manually deselected - restore it
+        // Remove from manually deselected list
+        const newManuallyDeselected = manuallyDeselectedRowsLocal.filter(
+          (id) => id !== row.idx,
+        );
+        setManuallyDeselectedRowsLocal(newManuallyDeselected);
+
         if (onRestoreAutoSelection) {
           onRestoreAutoSelection(row.idx);
         }
-        return; // Don't add to manual selection, restore to auto
-      } else {
-        // Regular row - add to manual selection
-        const newManualSelection = [...manuallySelectedRows, row.idx];
-        setManuallySelectedRows(newManualSelection);
+        return;
       }
 
-      // Update the global selected row data
+      // Calculate which rows should be selected/deselected
+      let rowsToToggle: string[] = [row.idx];
+
+      // Determine if we're selecting or deselecting
+      const isSelecting = !isCurrentlySelected;
+
+      // For CBL table with group_id, when SELECTING, include all rows with the same group_id
+      // When DESELECTING, only deselect the clicked row (not all related rows)
+      if (fileType === 1 && row.group_id && isSelecting) {
+        const rowsWithSameGroup = data.filter(
+          (r) =>
+            r.idx !== row.idx &&
+            r.group_id === row.group_id &&
+            r.ProcessedAmount !== "",
+        );
+        rowsToToggle = [row.idx, ...rowsWithSameGroup.map((r) => r.idx)];
+
+        // Console log: Count of CBL rows in the group
+        const totalCBLGroupCount = rowsToToggle.length;
+        console.log(`[CBL Group Selection] Group ID: ${row.group_id}`);
+        console.log(
+          `[CBL Group Selection] Total CBL rows in group: ${totalCBLGroupCount} (1 clicked + ${rowsWithSameGroup.length} auto-selected)`,
+        );
+        console.log(`[CBL Group Selection] CBL row indices:`, rowsToToggle);
+      }
+
+      // Update manual selection state (single update)
+      const newManualSelection = isSelecting
+        ? Array.from(new Set([...manuallySelectedRows, ...rowsToToggle])) // Add rows
+        : manuallySelectedRows.filter((id) => !rowsToToggle.includes(id)); // Remove rows (only the clicked row)
+
+      setManuallySelectedRows(newManualSelection);
+
+      // Track manually deselected rows
+      if (!isSelecting) {
+        // Row is being deselected - add to manually deselected list
+        const newManuallyDeselected = Array.from(
+          new Set([...manuallyDeselectedRowsLocal, ...rowsToToggle]),
+        );
+        setManuallyDeselectedRowsLocal(newManuallyDeselected);
+      } else {
+        // Row is being selected - remove from manually deselected list if it was there
+        const newManuallyDeselected = manuallyDeselectedRowsLocal.filter(
+          (id) => !rowsToToggle.includes(id),
+        );
+        setManuallyDeselectedRowsLocal(newManuallyDeselected);
+      }
+
+      // Update global selected row data (single update)
       if (setSelectedRowData) {
         setSelectedRowData((prev) => {
-          if (prev.some((r) => r.idx === row.idx)) {
-            // Remove the row from selection
-            return prev.filter((r) => r.idx !== row.idx);
+          const existingIndices = new Set(prev.map((r) => r.idx));
+
+          if (isSelecting) {
+            // Add rows that aren't already selected
+            const rowsToAdd = rowsToToggle
+              .filter((idx) => !existingIndices.has(idx))
+              .map((idx) => {
+                const rowData = data.find((r) => r.idx === idx) || row;
+                return { ...rowData, match_condition: "manual match" };
+              });
+            return [...prev, ...rowsToAdd];
           } else {
-            // Add the row to selection
-            const matchCondition = isAutoSelected
-              ? "auto match"
-              : "manual match";
-            return [...prev, { ...row, match_condition: matchCondition }];
+            // Remove only the clicked row (not all related rows)
+            return prev.filter((r) => !rowsToToggle.includes(r.idx));
           }
         });
       }
 
-      // Handle CBL table (fileType 1) automatic highlighting logic
-      if (fileType === 1) {
-        // Get the group_id from the clicked row
-        const groupId = row.group_id;
-        
-        if (groupId !== undefined && groupId !== null && groupId !== "") {
-          // Find all rows with the same group_id (excluding the clicked row)
-          const rowsWithSameGroup = data.filter(
-            (r) => 
-              r.idx !== row.idx && 
-              r.group_id === groupId && 
-              r.ProcessedAmount !== ""
-          );
-          
-          if (!isCurrentlySelected) {
-            // Selecting a CBL row - auto-select all OTHER rows with the same group_id
-            const groupRowIndices = rowsWithSameGroup.map((r) => r.idx);
-            
-            // Add all other group rows to manual selection (excluding already selected ones)
-            const newManualSelection = [
-              ...manuallySelectedRows,
-              ...groupRowIndices.filter((idx) => !manuallySelectedRows.includes(idx) && !selectedRows.includes(idx))
-            ];
-            setManuallySelectedRows(newManualSelection);
-            
-            // Update global selected row data for all other group rows
-            if (setSelectedRowData) {
-              setSelectedRowData((prev) => {
-                const existingIndices = new Set(prev.map((r) => r.idx));
-                const newRows = rowsWithSameGroup
-                  .filter((r) => !existingIndices.has(r.idx))
-                  .map((r) => ({ ...r, match_condition: "manual match" }));
-                return [...prev, ...newRows];
-              });
-            }
-          } else {
-            // Deselecting a CBL row - deselect all OTHER rows with the same group_id
-            const groupRowIndices = rowsWithSameGroup.map((r) => r.idx);
-            
-            // Remove all other group rows from manual selection
-            const newManualSelection = manuallySelectedRows.filter(
-              (id) => !groupRowIndices.includes(id)
+      // Handle Insurer row auto-selection using matched_insurer_indices
+      if (fileType === 1 && onRowSelection) {
+        if (isSelecting) {
+          // When SELECTING, auto-select related insurer rows
+          const targetIndices = calculateTargetRowIndices(row);
+          if (targetIndices.length > 0) {
+            // Console log: Count of Insurer rows auto-selected
+            console.log(`[Insurer Auto-Selection] CBL row idx: ${row.idx}`);
+            console.log(
+              `[Insurer Auto-Selection] Total Insurer rows auto-selected: ${targetIndices.length}`,
             );
-            setManuallySelectedRows(newManualSelection);
-            
-            // Remove other group rows from global selected row data
-            if (setSelectedRowData) {
-              setSelectedRowData((prev) => 
-                prev.filter((r) => !groupRowIndices.includes(r.idx))
-              );
+            console.log(
+              `[Insurer Auto-Selection] Insurer row indices:`,
+              targetIndices,
+            );
+            if (row.matched_insurer_indices) {
+              try {
+                const matchedIndices = JSON.parse(row.matched_insurer_indices);
+                console.log(
+                  `[Insurer Auto-Selection] matched_insurer_indices from CBL row:`,
+                  matchedIndices,
+                );
+              } catch (e) {
+                console.log(
+                  `[Insurer Auto-Selection] matched_insurer_indices (raw):`,
+                  row.matched_insurer_indices,
+                );
+              }
             }
+
+            // Create mappings for all selected rows (including group selections)
+            // This ensures that when any row is deselected, others still have mappings
+            rowsToToggle.forEach((selectedIdx) => {
+              const selectedRow = data.find((r) => r.idx === selectedIdx);
+              // Only create mapping if the row has the same matched_insurer_indices
+              // (for group selections, all rows should have the same matched_insurer_indices)
+              if (
+                selectedRow &&
+                selectedRow.matched_insurer_indices ===
+                  row.matched_insurer_indices
+              ) {
+                onRowSelection(targetIndices, fileType, selectedIdx, false);
+              }
+            });
           }
-        }
-        
-        // Handle Insurer row auto-selection using matched_insurer_indices
-        if (onRowSelection) {
-          if (!isCurrentlySelected) {
-            // Selecting a CBL row - trigger automatic highlighting for Insurer rows
-            const targetIndices = calculateTargetRowIndices(row);
-            if (targetIndices.length > 0) {
-              onRowSelection(targetIndices, fileType, row.idx, false);
-            }
+        } else {
+          // When DESELECTING, check if this is the last selected CBL row
+          if (newManualSelection.length < 1) {
+            // No more manually selected CBL rows - clear all insurer selections
+            onRowSelection([], fileType, undefined, true);
           } else {
-            // Deselecting a CBL row - clear automatic highlighting for Insurer rows
+            // Remove this CBL row's mapping
+            // The parent component will recalculate insurer rows from all remaining mappings
+            // Since we create mappings for all rows when selecting (including group selections),
+            // other selected rows with the same matched_insurer_indices will still have their mappings
+            // and insurer rows will remain selected
             onRowSelection([], fileType, row.idx, true);
           }
         }
       }
+
+      // For Insurer side (fileType === 2), handle individual row selection/deselection
+      // No need to call onRowSelection for insurer rows - they can be individually selected/deselected
     },
     [
       selectedRows,
       manuallySelectedRows,
       manuallyDeselectedRows,
+      manuallyDeselectedRowsLocal,
       externalSelectedRows,
       fileType,
+      data,
       setSelectedRowData,
       onRowSelection,
       onRemoveAutoSelection,
       onRestoreAutoSelection,
       calculateTargetRowIndices,
-    ]
+    ],
   );
 
   // Function to determine row class name based on row state
@@ -894,7 +1014,7 @@ function MatchableDataTable({
       externalSelectedRows,
       manuallySelectedRows,
       manuallyDeselectedRows,
-    ]
+    ],
   );
 
   // Function to navigate to a specific row by ID
@@ -907,19 +1027,19 @@ function MatchableDataTable({
       // Try multiple selectors to find the row
       const rowElement =
         (tableWrapperRef.current?.querySelector(
-          `tr[data-row-key="${rowId}"]`
+          `tr[data-row-key="${rowId}"]`,
         ) as HTMLElement) ||
         (tableWrapperRef.current?.querySelector(
-          `.ant-table-tbody tr[data-row-key="${rowId}"]`
+          `.ant-table-tbody tr[data-row-key="${rowId}"]`,
         ) as HTMLElement) ||
         (tableWrapperRef.current?.querySelector(
-          `.consistent-height-table tr[data-row-key="${rowId}"]`
+          `.consistent-height-table tr[data-row-key="${rowId}"]`,
         ) as HTMLElement);
 
       if (rowElement) {
         // Find the scrollable container (Ant Design table body)
         const scrollContainer = tableWrapperRef.current?.querySelector(
-          ".ant-table-body"
+          ".ant-table-body",
         ) as HTMLElement;
 
         if (scrollContainer) {
@@ -956,8 +1076,8 @@ function MatchableDataTable({
       currentNavigationIndex < 0
         ? 0
         : currentNavigationIndex < selectedRows.length - 1
-        ? currentNavigationIndex + 1
-        : currentNavigationIndex; // Don't wrap, stay at last
+          ? currentNavigationIndex + 1
+          : currentNavigationIndex; // Don't wrap, stay at last
     setCurrentNavigationIndex(nextIndex);
     navigateToRow(selectedRows[nextIndex]);
   }, [selectedRows, currentNavigationIndex, navigateToRow]);
@@ -971,8 +1091,8 @@ function MatchableDataTable({
       currentNavigationIndex < 0
         ? selectedRows.length - 1
         : currentNavigationIndex > 0
-        ? currentNavigationIndex - 1
-        : currentNavigationIndex; // Don't wrap, stay at first
+          ? currentNavigationIndex - 1
+          : currentNavigationIndex; // Don't wrap, stay at first
     setCurrentNavigationIndex(prevIndex);
     navigateToRow(selectedRows[prevIndex]);
   }, [selectedRows, currentNavigationIndex, navigateToRow]);
@@ -998,6 +1118,66 @@ function MatchableDataTable({
     selectedRows,
     navigateToRow,
   ]);
+
+  // Handle deselecting all rows
+  const handleDeselectAll = useCallback(() => {
+    // Clear all manual selections
+    setManuallySelectedRows([]);
+
+    // Clear manually deselected rows
+    setManuallyDeselectedRowsLocal([]);
+
+    // Clear global selected row data
+    if (setSelectedRowData) {
+      setSelectedRowData([]);
+    }
+
+    // For CBL table, clear all mappings (which will clear insurer row selections)
+    if (fileType === 1 && onRowSelection) {
+      onRowSelection([], fileType, undefined, true);
+    }
+
+    // Reset navigation index
+    setCurrentNavigationIndex(-1);
+  }, [fileType, onRowSelection, setSelectedRowData]);
+
+  // Handle scroll synchronization
+  useEffect(() => {
+    if (!syncScrollEnabled || !onScroll) return;
+
+    const scrollContainer = tableWrapperRef.current?.querySelector(
+      ".ant-table-body",
+    ) as HTMLElement;
+
+    if (!scrollContainer) return;
+
+    const handleScroll = () => {
+      if (onScroll) {
+        onScroll(scrollContainer.scrollTop);
+      }
+    };
+
+    scrollContainer.addEventListener("scroll", handleScroll);
+    return () => {
+      scrollContainer.removeEventListener("scroll", handleScroll);
+    };
+  }, [syncScrollEnabled, onScroll]);
+
+  // Sync scroll position when external scroll position changes
+  useEffect(() => {
+    if (!syncScrollEnabled || externalScrollTop === undefined) return;
+
+    const scrollContainer = tableWrapperRef.current?.querySelector(
+      ".ant-table-body",
+    ) as HTMLElement;
+
+    if (
+      scrollContainer &&
+      Math.abs(scrollContainer.scrollTop - externalScrollTop) > 1
+    ) {
+      scrollContainer.scrollTop = externalScrollTop;
+    }
+  }, [syncScrollEnabled, externalScrollTop]);
 
   return (
     <div ref={tableWrapperRef}>
@@ -1025,6 +1205,24 @@ function MatchableDataTable({
             maxWidth: "300px",
           }}
         />
+        {fileType === 1 && (
+          <Tooltip
+            title={
+              syncScrollEnabled
+                ? "Disable synchronized scrolling"
+                : "Enable synchronized scrolling"
+            }
+          >
+            <Button
+              type={syncScrollEnabled ? "primary" : "default"}
+              icon={<LinkOutlined />}
+              size="small"
+              onClick={() => onSyncScrollChange?.(!syncScrollEnabled)}
+            >
+              {syncScrollEnabled ? "Sync Scroll: ON" : "Sync Scroll: OFF"}
+            </Button>
+          </Tooltip>
+        )}
         {selectedRows.length > 0 && (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -1074,6 +1272,20 @@ function MatchableDataTable({
                 />
               </Tooltip>
             </div>
+            {fileType === 1 && (
+              <Tooltip title="Deselect all selected rows">
+                <Button
+                  type="default"
+                  icon={<CloseOutlined />}
+                  size="small"
+                  onClick={handleDeselectAll}
+                  disabled={selectedRows.length === 0}
+                  danger
+                >
+                  Deselect All
+                </Button>
+              </Tooltip>
+            )}
             <Tooltip title="Subtotal of selected rows">
               <span
                 style={{

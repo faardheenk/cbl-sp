@@ -169,7 +169,12 @@ export const manualMatching = (
     // Handle partial match to exact match conversion (existing logic)
     console.log("Processing partial match to exact match conversion");
 
-    // Remove CBL rows as before
+    // Build a set of selected CBL row indices for quick lookup
+    const selectedCBLIndices = new Set(
+      selectedRowsCBL.map((row) => row.idx)
+    );
+
+    // Remove CBL rows - ONLY rows that are actually selected
     selectedRowsCBL.forEach((selectedRow) => {
       const selectedIndex = rowsCBL.findIndex(
         (row) => row["idx"] === selectedRow["idx"]
@@ -179,6 +184,8 @@ export const manualMatching = (
         rowsToRemoveCBL.add(selectedIndex);
         const row = rowsCBL[selectedIndex];
 
+        // CRITICAL FIX: Only remove adjacent rows if they are also selected
+        // This prevents removing unselected rows that were auto-selected by group_id
         if (row.matched_insurer_indices) {
           try {
             const matchedIndices = JSON.parse(row.matched_insurer_indices);
@@ -189,7 +196,11 @@ export const manualMatching = (
               for (let i = 1; i <= additionalRowsToRemove; i++) {
                 const nextIndex = selectedIndex + i;
                 if (nextIndex < rowsCBL.length) {
-                  rowsToRemoveCBL.add(nextIndex);
+                  const nextRow = rowsCBL[nextIndex];
+                  // Only remove if this row is also in the selected set
+                  if (selectedCBLIndices.has(nextRow.idx)) {
+                    rowsToRemoveCBL.add(nextIndex);
+                  }
                 }
               }
             }
@@ -245,12 +256,20 @@ export const manualMatching = (
           }
         } else {
           // If matched indices length matches, treat as normal exact match
+          // CRITICAL FIX: Only remove insurer rows that are actually selected
           if (insurerIndex !== -1) {
+            const selectedInsurerIndices = new Set(
+              selectedRowsInsurer.map((row) => row.idx)
+            );
             for (let j = 0; j < n; j++) {
               const idxToRemove = insurerIndex + j;
               if (idxToRemove < rowsInsurer.length) {
-                rowsToRemoveInsurer.add(idxToRemove);
-                exactMatchInsurerRows.push(rowsInsurer[idxToRemove]);
+                const insurerRow = rowsInsurer[idxToRemove];
+                // Only remove if this row is actually selected
+                if (selectedInsurerIndices.has(insurerRow.idx)) {
+                  rowsToRemoveInsurer.add(idxToRemove);
+                  exactMatchInsurerRows.push(insurerRow);
+                }
               }
             }
           }

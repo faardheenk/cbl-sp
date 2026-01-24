@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { MoneyRegular, DocumentRegular } from "@fluentui/react-icons";
 import styles from "./Reconciliation.module.scss";
 import { countNonBlankRows, formatAmount } from "../../../utils/utils";
@@ -64,51 +64,51 @@ function MatchableComponent({
     type === "exact"
       ? exactMatchCBL
       : type === "partial"
-      ? partialMatchCBL
-      : noMatchCBL;
+        ? partialMatchCBL
+        : noMatchCBL;
   const dataFile2 =
     type === "exact"
       ? exactMatchInsurer
       : type === "partial"
-      ? partialMatchInsurer
-      : noMatchInsurer;
+        ? partialMatchInsurer
+        : noMatchInsurer;
   const sum1 =
     type === "exact"
       ? exactMatchSum1
       : type === "partial"
-      ? partialMatchSum1
-      : noMatchSum1;
+        ? partialMatchSum1
+        : noMatchSum1;
   const sum2 =
     type === "exact"
       ? exactMatchSum2
       : type === "partial"
-      ? partialMatchSum2
-      : noMatchSum2;
+        ? partialMatchSum2
+        : noMatchSum2;
 
   const setSum1 =
     type === "exact"
       ? setExactMatchSum1
       : type === "partial"
-      ? setPartialMatchSum1
-      : setNoMatchSum1;
+        ? setPartialMatchSum1
+        : setNoMatchSum1;
   const setSum2 =
     type === "exact"
       ? setExactMatchSum2
       : type === "partial"
-      ? setPartialMatchSum2
-      : setNoMatchSum2;
+        ? setPartialMatchSum2
+        : setNoMatchSum2;
   const setMatchesFile1 =
     type === "exact"
       ? setExactMatchCBL
       : type === "partial"
-      ? setPartialMatchCBL
-      : setNoMatchCBL;
+        ? setPartialMatchCBL
+        : setNoMatchCBL;
   const setMatchesFile2 =
     type === "exact"
       ? setExactMatchInsurer
       : type === "partial"
-      ? setPartialMatchInsurer
-      : setNoMatchInsurer;
+        ? setPartialMatchInsurer
+        : setNoMatchInsurer;
 
   // State to manage cross-table row selection
   const [autoSelectedInsurerRows, setAutoSelectedInsurerRows] = useState<
@@ -134,6 +134,12 @@ function MatchableComponent({
   // Shared current page state for cross-table pagination
   const [sharedCurrentPage, setSharedCurrentPage] = useState<number>(1);
 
+  // Scroll synchronization state
+  const [syncScrollEnabled, setSyncScrollEnabled] = useState<boolean>(false);
+  const [cblScrollTop, setCblScrollTop] = useState<number>(0);
+  const [insurerScrollTop, setInsurerScrollTop] = useState<number>(0);
+  const isScrollingRef = useRef<boolean>(false);
+
   // Clear cross-table selections when clearSelections prop is true
   useEffect(() => {
     if (clearSelections || clearAllSelections) {
@@ -148,34 +154,43 @@ function MatchableComponent({
     selectedRowIndices: string[],
     sourceFileType: 1 | 2,
     sourceRowId?: string,
-    isDeselection?: boolean
+    isDeselection?: boolean,
   ) => {
-    if (sourceFileType === 1 && sourceRowId) {
-      const newMappings = new Map(cblSelectionMappings);
+    if (sourceFileType === 1) {
+      setCblSelectionMappings((prevMappings) => {
+        const newMappings = new Map(prevMappings);
 
-      if (isDeselection) {
-        // Remove this CBL row's mapping
-        newMappings.delete(sourceRowId);
-      } else {
-        // Add/update this CBL row's mapping
-        newMappings.set(sourceRowId, selectedRowIndices);
-      }
+        if (isDeselection) {
+          if (sourceRowId) {
+            // Remove this specific CBL row's mapping
+            newMappings.delete(sourceRowId);
+          } else {
+            // sourceRowId is undefined - clear all mappings (when no CBL rows are selected)
+            newMappings.clear();
+          }
+        } else {
+          // Add/update this CBL row's mapping
+          if (sourceRowId) {
+            newMappings.set(sourceRowId, selectedRowIndices);
+          }
+        }
 
-      // Update the mappings
-      setCblSelectionMappings(newMappings);
+        // Calculate all auto-selected Insurer rows from all CBL selections
+        const allAutoSelectedRows: string[] = [];
+        newMappings.forEach((insurerRows) => {
+          allAutoSelectedRows.push(...insurerRows);
+        });
 
-      // Calculate all auto-selected Insurer rows from all CBL selections
-      const allAutoSelectedRows: string[] = [];
-      newMappings.forEach((insurerRows) => {
-        allAutoSelectedRows.push(...insurerRows);
+        // Remove duplicates and filter out manually deselected rows
+        const uniqueAutoSelectedRows = Array.from(
+          new Set(allAutoSelectedRows),
+        ).filter((rowId) => !manuallyDeselectedRows.has(rowId));
+
+        // Update insurer rows in the same state update to avoid race conditions
+        setAutoSelectedInsurerRows(uniqueAutoSelectedRows);
+
+        return newMappings;
       });
-
-      // Remove duplicates and filter out manually deselected rows
-      const uniqueAutoSelectedRows = Array.from(
-        new Set(allAutoSelectedRows)
-      ).filter((rowId) => !manuallyDeselectedRows.has(rowId));
-
-      setAutoSelectedInsurerRows(uniqueAutoSelectedRows);
     }
   };
 
@@ -184,7 +199,7 @@ function MatchableComponent({
     _selectedRowIndices: string[],
     _sourceFileType: 1 | 2,
     _sourceRowId?: string,
-    _isDeselection?: boolean
+    _isDeselection?: boolean,
   ) => {
     // If user manually deselects auto-selected rows, we might want to handle this
     // For now, we'll allow the manual override without affecting CBL selection
@@ -199,7 +214,7 @@ function MatchableComponent({
 
     // Remove from current auto-selected list
     const newAutoSelected = autoSelectedInsurerRows.filter(
-      (id) => id !== rowId
+      (id) => id !== rowId,
     );
     setAutoSelectedInsurerRows(newAutoSelected);
   };
@@ -222,6 +237,28 @@ function MatchableComponent({
       const newAutoSelected = [...autoSelectedInsurerRows, rowId];
       setAutoSelectedInsurerRows(newAutoSelected);
     }
+  };
+
+  // Handler for CBL table scroll
+  const handleCblScroll = (scrollTop: number) => {
+    if (!syncScrollEnabled || isScrollingRef.current) return;
+    isScrollingRef.current = true;
+    setCblScrollTop(scrollTop);
+    setInsurerScrollTop(scrollTop);
+    setTimeout(() => {
+      isScrollingRef.current = false;
+    }, 50);
+  };
+
+  // Handler for Insurer table scroll
+  const handleInsurerScroll = (scrollTop: number) => {
+    if (!syncScrollEnabled || isScrollingRef.current) return;
+    isScrollingRef.current = true;
+    setInsurerScrollTop(scrollTop);
+    setCblScrollTop(scrollTop);
+    setTimeout(() => {
+      isScrollingRef.current = false;
+    }, 50);
   };
 
   return (
@@ -286,6 +323,10 @@ function MatchableComponent({
                   onUnmatch={onUnmatch}
                   onMoveToExactMatch={onMoveToExactMatch}
                   onMoveToPartialMatch={onMoveToPartialMatch}
+                  syncScrollEnabled={syncScrollEnabled}
+                  onSyncScrollChange={setSyncScrollEnabled}
+                  onScroll={handleCblScroll}
+                  externalScrollTop={insurerScrollTop}
                 />
               </div>
             </div>
@@ -342,6 +383,9 @@ function MatchableComponent({
                   onUnmatch={onUnmatch}
                   onMoveToExactMatch={onMoveToExactMatch}
                   onMoveToPartialMatch={onMoveToPartialMatch}
+                  syncScrollEnabled={syncScrollEnabled}
+                  onScroll={handleInsurerScroll}
+                  externalScrollTop={cblScrollTop}
                 />
               </div>
             </div>

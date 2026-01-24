@@ -433,134 +433,584 @@ function Reconciliation() {
     noMatchInsurer,
   ]);
 
-  const handleMoveToPartialMatch = async () => {
-    console.log("Moving to partial match");
-    if (selectedRowCBL.length > 0 && selectedRowInsurer.length > 0) {
+  // Unified function to move rows between sections
+  const moveRows = useCallback(
+    async (
+      toSection: "exact" | "partial" | "no-match",
+      actionType: "moveToExact" | "moveToPartial" | "unmatch"
+    ) => {
+      if (selectedRowCBL.length === 0 || selectedRowInsurer.length === 0) {
+        return;
+      }
+
       setChanges(true);
-
       const matrixKey = generateMatrixKeys(selectedRowCBL, selectedRowInsurer);
+      setMatrix((prev) => [...prev, matrixKey]);
 
-      setMatrix([...matrix, matrixKey]);
-
-      // Check if selected rows are from no match section
-      const isFromNoMatch =
-        selectedRowCBL.length > 0 &&
-        noMatchCBL.length > 0 &&
-        selectedRowCBL.some((selectedRow) =>
-          noMatchCBL.some(
-            (noMatchRow) => noMatchRow["idx"] === selectedRow["idx"]
+      // Determine source section
+      const findSourceSection = () => {
+        if (
+          exactMatchCBL.some((row) =>
+            selectedRowCBL.some((selected) => selected.idx === row.idx)
           )
+        ) {
+          return "exact";
+        }
+        if (
+          partialMatchCBL.some((row) =>
+            selectedRowCBL.some((selected) => selected.idx === row.idx)
+          )
+        ) {
+          return "partial";
+        }
+        if (
+          noMatchCBL.some((row) =>
+            selectedRowCBL.some((selected) => selected.idx === row.idx)
+          )
+        ) {
+          return "no-match";
+        }
+        return null;
+      };
+
+      const fromSection = findSourceSection();
+      if (!fromSection) {
+        console.warn("Could not determine source section");
+        return;
+      }
+
+      // Get source arrays
+      const getSourceArrays = () => {
+        switch (fromSection) {
+          case "exact":
+            return { cbl: exactMatchCBL, insurer: exactMatchInsurer };
+          case "partial":
+            return { cbl: partialMatchCBL, insurer: partialMatchInsurer };
+          case "no-match":
+            return { cbl: noMatchCBL, insurer: noMatchInsurer };
+        }
+      };
+
+      const getDestinationArrays = () => {
+        switch (toSection) {
+          case "exact":
+            return { cbl: exactMatchCBL, insurer: exactMatchInsurer };
+          case "partial":
+            return { cbl: partialMatchCBL, insurer: partialMatchInsurer };
+          case "no-match":
+            return { cbl: noMatchCBL, insurer: noMatchInsurer };
+        }
+      };
+
+      const getSetters = () => {
+        switch (toSection) {
+          case "exact":
+            return {
+              cbl: setExactMatchCBL,
+              insurer: setExactMatchInsurer,
+            };
+          case "partial":
+            return {
+              cbl: setPartialMatchCBL,
+              insurer: setPartialMatchInsurer,
+            };
+          case "no-match":
+            return {
+              cbl: setNoMatchCBL,
+              insurer: setNoMatchInsurer,
+            };
+        }
+      };
+
+      const source = getSourceArrays();
+      const destination = getDestinationArrays();
+      const setters = getSetters();
+
+      // Get indices for history
+      const getIndices = (sourceArray: any[]) => {
+        return selectedRowCBL
+          .map((selectedRow) =>
+            sourceArray.findIndex((row) => row.idx === selectedRow.idx)
+          )
+          .filter((idx) => idx !== -1);
+      };
+
+      const cblRowIndices = getIndices(source.cbl);
+      const insurerRowIndices = getIndices(source.insurer);
+
+      // Add to history
+      addToHistory({
+        actionType,
+        fromSection,
+        toSection,
+        cblRows: [...selectedRowCBL],
+        insurerRows: [...selectedRowInsurer],
+        cblRowIndices,
+        insurerRowIndices,
+        matrixKey,
+      });
+
+      // Helper to check if a row is blank
+      const isBlankRow = (row: any): boolean => {
+        return !row.ProcessedAmount || row.ProcessedAmount === "";
+      };
+
+      // Helper to check if a row is selected
+      const isRowSelected = (row: any, selectedRows: any[]): boolean => {
+        return selectedRows.some((selected) => selected.idx === row.idx);
+      };
+
+      // Helper to find the range of indices to move (including blank rows for equalization)
+      const findEqualizedRange = (
+        sourceArray: any[],
+        selectedIndices: number[]
+      ): number[] => {
+        if (selectedIndices.length === 0) return [];
+        
+        const minIndex = Math.min(...selectedIndices);
+        const maxIndex = Math.max(...selectedIndices);
+        
+        // For equalized tables (exact/partial), include all rows in the range
+        // This includes blank rows that were added for equalization
+        const range: number[] = [];
+        for (let i = minIndex; i <= maxIndex; i++) {
+          if (i < sourceArray.length) {
+            range.push(i);
+          }
+        }
+        return range;
+      };
+
+      // Remove from source (special handling for exact match with one-to-many)
+      let updatedSourceCBL: any[];
+      let updatedSourceInsurer: any[];
+      let rowsToMoveCBL: any[];
+      let rowsToMoveInsurer: any[];
+
+      if (fromSection === "exact") {
+        // For exact matches, only remove rows that are actually selected
+        // Build sets of selected row indices for quick lookup
+        const selectedCBLIndices = new Set(
+          selectedRowCBL.map((row) => row.idx)
+        );
+        const selectedInsurerIndices = new Set(
+          selectedRowInsurer.map((row) => row.idx)
         );
 
-      if (isFromNoMatch) {
-        // Handle no match to partial match conversion
-        console.log("Moving from no match to partial match");
-        console.log("Selected CBL rows:", selectedRowCBL);
-        console.log("Selected Insurer rows:", selectedRowInsurer);
-
-        // Get original indices before removal
-        const cblRowIndices = selectedRowCBL
-          .map((selectedRow) =>
-            noMatchCBL.findIndex((row) => row.idx === selectedRow.idx)
-          )
-          .filter((idx) => idx !== -1);
-        const insurerRowIndices = selectedRowInsurer
-          .map((selectedRow) =>
-            noMatchInsurer.findIndex((row) => row.idx === selectedRow.idx)
-          )
-          .filter((idx) => idx !== -1);
-
-        // Add to action history for undo
-        addToHistory({
-          actionType: "moveToPartial",
-          fromSection: "no-match",
-          toSection: "partial",
-          cblRows: [...selectedRowCBL],
-          insurerRows: [...selectedRowInsurer],
-          cblRowIndices,
-          insurerRowIndices,
-          matrixKey,
+        // Find CBL rows to remove - ONLY rows that are actually selected
+        const rowsToRemoveCBL = new Set<number>();
+        selectedRowCBL.forEach((selectedRow: any) => {
+          const selectedIndex = source.cbl.findIndex(
+            (row) => row.idx === selectedRow.idx
+          );
+          if (selectedIndex !== -1) {
+            rowsToRemoveCBL.add(selectedIndex);
+          }
         });
 
-        // Remove selected rows from no match sections
-        const updatedNoMatchCBL = filterOutSelectedRows(
-          noMatchCBL,
-          selectedRowCBL,
-          "idx"
+        // For insurer rows, only remove rows that are actually selected
+        // Handle one-to-many relationships: if a selected CBL row has multiple matches,
+        // only remove the corresponding insurer rows that are also selected
+        const rowsToRemoveInsurer = new Set<number>();
+
+        selectedRowCBL.forEach((selectedCBLRow: any) => {
+          const cblIndex = source.cbl.findIndex(
+            (row) => row.idx === selectedCBLRow.idx
+          );
+
+          if (cblIndex !== -1) {
+            const cblRow = source.cbl[cblIndex];
+            
+            if (cblRow.matched_insurer_indices) {
+              try {
+                const matchedIndices = JSON.parse(cblRow.matched_insurer_indices);
+                if (Array.isArray(matchedIndices) && matchedIndices.length > 1) {
+                  // One-to-many: check each corresponding insurer row and only remove if selected
+                  for (let i = 0; i < matchedIndices.length; i++) {
+                    const insurerIndex = cblIndex + i;
+                    if (insurerIndex < source.insurer.length) {
+                      const insurerRow = source.insurer[insurerIndex];
+                      // CRITICAL FIX: Only remove if this insurer row is actually selected
+                      if (selectedInsurerIndices.has(insurerRow.idx)) {
+                        rowsToRemoveInsurer.add(insurerIndex);
+                      }
+                    }
+                  }
+                } else {
+                  // Single match: only remove if the insurer row is selected
+                  if (cblIndex < source.insurer.length) {
+                    const insurerRow = source.insurer[cblIndex];
+                    if (selectedInsurerIndices.has(insurerRow.idx)) {
+                      rowsToRemoveInsurer.add(cblIndex);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.warn("Failed to parse matched_insurer_indices:", error);
+                // Fallback: only remove if insurer row is selected
+                if (cblIndex < source.insurer.length) {
+                  const insurerRow = source.insurer[cblIndex];
+                  if (selectedInsurerIndices.has(insurerRow.idx)) {
+                    rowsToRemoveInsurer.add(cblIndex);
+                  }
+                }
+              }
+            } else {
+              // No matched_insurer_indices: only remove if insurer row is selected
+              if (cblIndex < source.insurer.length) {
+                const insurerRow = source.insurer[cblIndex];
+                if (selectedInsurerIndices.has(insurerRow.idx)) {
+                  rowsToRemoveInsurer.add(cblIndex);
+                }
+              }
+            }
+          }
+        });
+
+        // Also add directly selected insurer rows
+        selectedRowInsurer.forEach((selectedRow: any) => {
+          const selectedIndex = source.insurer.findIndex(
+            (row) => row.idx === selectedRow.idx
+          );
+          if (selectedIndex !== -1) {
+            rowsToRemoveInsurer.add(selectedIndex);
+          }
+        });
+
+        // For equalized tables, find the range including blank rows
+        const cblIndicesArray = Array.from(rowsToRemoveCBL);
+        const insurerIndicesArray = Array.from(rowsToRemoveInsurer);
+        
+        // Find the base range for each array
+        const cblBaseRange = findEqualizedRange(source.cbl, cblIndicesArray);
+        const insurerBaseRange = findEqualizedRange(
+          source.insurer,
+          insurerIndicesArray
         );
-        const updatedNoMatchInsurer = filterOutSelectedRows(
-          noMatchInsurer,
-          selectedRowInsurer,
-          "idx"
+        
+        // Determine the target length (the longer of the two, as tables are equalized)
+        const targetLength = Math.max(cblBaseRange.length, insurerBaseRange.length);
+        
+        // Extend CBL range to match target length (includes blank rows for equalization)
+        const cblRangeToMove = [...cblBaseRange];
+        let cblMaxIndex = cblBaseRange.length > 0 ? Math.max(...cblBaseRange) : -1;
+        while (cblRangeToMove.length < targetLength && cblMaxIndex + 1 < source.cbl.length) {
+          cblMaxIndex++;
+          // Include next row if it's blank (part of equalization) or if we need to reach target length
+          if (isBlankRow(source.cbl[cblMaxIndex]) || cblRangeToMove.length < targetLength) {
+            cblRangeToMove.push(cblMaxIndex);
+          }
+        }
+        
+        // Extend insurer range to match target length
+        const insurerRangeToMove = [...insurerBaseRange];
+        let insurerMaxIndex = insurerBaseRange.length > 0 ? Math.max(...insurerBaseRange) : -1;
+        while (insurerRangeToMove.length < targetLength && insurerMaxIndex + 1 < source.insurer.length) {
+          insurerMaxIndex++;
+          // Include next row if it's blank (part of equalization) or if we need to reach target length
+          if (isBlankRow(source.insurer[insurerMaxIndex]) || insurerRangeToMove.length < targetLength) {
+            insurerRangeToMove.push(insurerMaxIndex);
+          }
+        }
+        
+        // Final check: ensure both ranges are exactly the same length (equalized)
+        const finalLength = Math.max(cblRangeToMove.length, insurerRangeToMove.length);
+        while (cblRangeToMove.length < finalLength && cblMaxIndex + 1 < source.cbl.length) {
+          cblMaxIndex++;
+          cblRangeToMove.push(cblMaxIndex);
+        }
+        while (insurerRangeToMove.length < finalLength && insurerMaxIndex + 1 < source.insurer.length) {
+          insurerMaxIndex++;
+          insurerRangeToMove.push(insurerMaxIndex);
+        }
+        
+        // Create sets from the extended ranges
+        const finalRowsToRemoveCBL = new Set(cblRangeToMove);
+        const finalRowsToRemoveInsurer = new Set(insurerRangeToMove);
+
+        // Filter out rows to remove
+        updatedSourceCBL = source.cbl.filter(
+          (_, index) => !finalRowsToRemoveCBL.has(index)
+        );
+        updatedSourceInsurer = source.insurer.filter(
+          (_, index) => !finalRowsToRemoveInsurer.has(index)
         );
 
-        // Regenerate idx after removal
-        const regeneratedNoMatchCBL = regenerateIdx(
-          updatedNoMatchCBL,
-          "no-match"
+        // Get rows to move - includes blank rows that were part of equalization
+        rowsToMoveCBL = source.cbl.filter((_, index) =>
+          finalRowsToRemoveCBL.has(index)
+        );
+        rowsToMoveInsurer = source.insurer.filter((_, index) =>
+          finalRowsToRemoveInsurer.has(index)
+        );
+      } else {
+        // For partial and no-match, find indices of selected rows
+        const selectedCBLIndices: number[] = [];
+        const selectedInsurerIndices: number[] = [];
+
+        selectedRowCBL.forEach((selectedRow) => {
+          const index = source.cbl.findIndex((row) => row.idx === selectedRow.idx);
+          if (index !== -1) selectedCBLIndices.push(index);
+        });
+
+        selectedRowInsurer.forEach((selectedRow) => {
+          const index = source.insurer.findIndex((row) => row.idx === selectedRow.idx);
+          if (index !== -1) selectedInsurerIndices.push(index);
+        });
+
+        // For equalized tables (partial), find the range including blank rows
+        let cblRangeToMove: number[] = [];
+        let insurerRangeToMove: number[] = [];
+
+        if (fromSection === "partial") {
+          // For partial matches, include blank rows in the equalized range
+          const cblBaseRange = findEqualizedRange(source.cbl, selectedCBLIndices);
+          const insurerBaseRange = findEqualizedRange(
+            source.insurer,
+            selectedInsurerIndices
+          );
+
+          // Determine target length (the longer range, as tables are equalized)
+          const targetLength = Math.max(cblBaseRange.length, insurerBaseRange.length);
+
+          // Extend CBL range to match target length
+          cblRangeToMove = [...cblBaseRange];
+          let cblMaxIndex = cblBaseRange.length > 0 ? Math.max(...cblBaseRange) : -1;
+          while (cblRangeToMove.length < targetLength && cblMaxIndex + 1 < source.cbl.length) {
+            cblMaxIndex++;
+            if (isBlankRow(source.cbl[cblMaxIndex]) || cblRangeToMove.length < targetLength) {
+              cblRangeToMove.push(cblMaxIndex);
+            }
+          }
+
+          // Extend insurer range to match target length
+          insurerRangeToMove = [...insurerBaseRange];
+          let insurerMaxIndex = insurerBaseRange.length > 0 ? Math.max(...insurerBaseRange) : -1;
+          while (insurerRangeToMove.length < targetLength && insurerMaxIndex + 1 < source.insurer.length) {
+            insurerMaxIndex++;
+            if (isBlankRow(source.insurer[insurerMaxIndex]) || insurerRangeToMove.length < targetLength) {
+              insurerRangeToMove.push(insurerMaxIndex);
+            }
+          }
+
+          // Final check: ensure both ranges are exactly the same length
+          const finalLength = Math.max(cblRangeToMove.length, insurerRangeToMove.length);
+          while (cblRangeToMove.length < finalLength && cblMaxIndex + 1 < source.cbl.length) {
+            cblMaxIndex++;
+            cblRangeToMove.push(cblMaxIndex);
+          }
+          while (insurerRangeToMove.length < finalLength && insurerMaxIndex + 1 < source.insurer.length) {
+            insurerMaxIndex++;
+            insurerRangeToMove.push(insurerMaxIndex);
+          }
+        } else {
+          // For no-match, just use selected indices (no equalization needed)
+          cblRangeToMove = selectedCBLIndices;
+          insurerRangeToMove = selectedInsurerIndices;
+        }
+
+        // Remove rows in the range
+        const cblIndicesToRemove = new Set(cblRangeToMove);
+        const insurerIndicesToRemove = new Set(insurerRangeToMove);
+
+        updatedSourceCBL = source.cbl.filter(
+          (_, index) => !cblIndicesToRemove.has(index)
+        );
+        updatedSourceInsurer = source.insurer.filter(
+          (_, index) => !insurerIndicesToRemove.has(index)
+        );
+
+        // Get rows to move - includes blank rows for partial matches
+        rowsToMoveCBL = source.cbl.filter((_, index) =>
+          cblIndicesToRemove.has(index)
+        );
+        rowsToMoveInsurer = source.insurer.filter((_, index) =>
+          insurerIndicesToRemove.has(index)
+        );
+      }
+
+      // Handle special case: partial to exact (uses manualMatching)
+      if (fromSection === "partial" && toSection === "exact") {
+        const { updatedRowsCBL, updatedRowsInsurer, updatedNoMatchInsurer } =
+          manualMatching(
+            partialMatchCBL,
+            partialMatchInsurer,
+            selectedRowCBL,
+            selectedRowInsurer,
+            noMatchInsurer,
+            noMatchCBL
+          );
+
+        // Remove blank rows from source after moving
+        const sourceCBLWithoutBlanks = updatedRowsCBL.filter(
+          (row) => !isBlankRow(row)
+        );
+        const sourceInsurerWithoutBlanks = updatedRowsInsurer.filter(
+          (row) => !isBlankRow(row)
+        );
+
+        // Re-equalize source tables (remove old blank rows, add new ones if needed)
+        // Get the current match group for partial section
+        const currentPartialMatchGroup = getNextMatchGroup(
+          sourceCBLWithoutBlanks,
+          sourceInsurerWithoutBlanks
+        );
+        const [equalizedSourceCBL, equalizedSourceInsurer] =
+          equalizeWorksheetLengths(
+            sourceCBLWithoutBlanks,
+            sourceInsurerWithoutBlanks,
+            currentPartialMatchGroup
+          );
+
+        const regeneratedPartialCBL = regenerateIdx(
+          equalizedSourceCBL,
+          "partial"
+        );
+        const regeneratedPartialInsurer = regenerateIdx(
+          equalizedSourceInsurer,
+          "partial"
         );
         const regeneratedNoMatchInsurer = regenerateIdx(
           updatedNoMatchInsurer,
           "no-match"
         );
 
-        setNoMatchCBL(regeneratedNoMatchCBL);
+        setPartialMatchCBL(regeneratedPartialCBL);
+        setPartialMatchInsurer(regeneratedPartialInsurer);
         setNoMatchInsurer(regeneratedNoMatchInsurer);
-
-        // Add selected rows to partial match sections
-        const nextMatchGroup = getNextMatchGroup(
-          partialMatchCBL,
-          partialMatchInsurer
+      } else {
+        // Remove blank rows from source after moving
+        const sourceCBLWithoutBlanks = updatedSourceCBL.filter(
+          (row) => !isBlankRow(row)
+        );
+        const sourceInsurerWithoutBlanks = updatedSourceInsurer.filter(
+          (row) => !isBlankRow(row)
         );
 
-        const selectedRowsWithGroup1 = addGroupAndCondition(
-          selectedRowCBL,
-          nextMatchGroup
-        );
-        const selectedRowsWithGroup2 = addGroupAndCondition(
-          selectedRowInsurer,
-          nextMatchGroup
-        );
+        // Re-equalize source tables (remove old blank rows, add new ones if needed)
+        // Only re-equalize if source section is exact or partial (no-match doesn't need equalization)
+        let finalSourceCBL = sourceCBLWithoutBlanks;
+        let finalSourceInsurer = sourceInsurerWithoutBlanks;
 
-        let newPartialMatchFile1Worksheet = [
-          ...partialMatchCBL,
-          ...selectedRowsWithGroup1,
-        ];
-        let newPartialMatchFile2Worksheet = [
-          ...partialMatchInsurer,
-          ...selectedRowsWithGroup2,
-        ];
-
-        [newPartialMatchFile1Worksheet, newPartialMatchFile2Worksheet] =
-          equalizeWorksheetLengths(
-            newPartialMatchFile1Worksheet,
-            newPartialMatchFile2Worksheet,
-            nextMatchGroup
+        if (fromSection === "exact" || fromSection === "partial") {
+          const currentSourceMatchGroup = getNextMatchGroup(
+            sourceCBLWithoutBlanks,
+            sourceInsurerWithoutBlanks
           );
+          [finalSourceCBL, finalSourceInsurer] = equalizeWorksheetLengths(
+            sourceCBLWithoutBlanks,
+            sourceInsurerWithoutBlanks,
+            currentSourceMatchGroup
+          );
+        }
 
-        const updatedPartialMatchCBL = regenerateIdx(
-          newPartialMatchFile1Worksheet,
-          "partial"
+        // Regenerate source indices
+        const regeneratedSourceCBL = regenerateIdx(finalSourceCBL, fromSection);
+        const regeneratedSourceInsurer = regenerateIdx(
+          finalSourceInsurer,
+          fromSection
         );
-        const updatedPartialMatchInsurer = regenerateIdx(
-          newPartialMatchFile2Worksheet,
-          "partial"
-        );
 
-        setPartialMatchCBL(updatedPartialMatchCBL);
-        setPartialMatchInsurer(updatedPartialMatchInsurer);
-
-        console.log("partialMatchCBL >>> ", partialMatchCBL);
-        console.log("partialMatchInsurer >>> ", partialMatchInsurer);
+        // Update source state
+        switch (fromSection) {
+          case "exact":
+            setExactMatchCBL(regeneratedSourceCBL);
+            setExactMatchInsurer(regeneratedSourceInsurer);
+            break;
+          case "partial":
+            setPartialMatchCBL(regeneratedSourceCBL);
+            setPartialMatchInsurer(regeneratedSourceInsurer);
+            break;
+          case "no-match":
+            setNoMatchCBL(regeneratedSourceCBL);
+            setNoMatchInsurer(regeneratedSourceInsurer);
+            break;
+        }
       }
 
+      // Add to destination
+      // First, remove blank rows from destination (clean up before adding)
+      const destinationCBLWithoutBlanks = destination.cbl.filter(
+        (row) => !isBlankRow(row)
+      );
+      const destinationInsurerWithoutBlanks = destination.insurer.filter(
+        (row) => !isBlankRow(row)
+      );
+
+      const nextMatchGroup = getNextMatchGroup(
+        destinationCBLWithoutBlanks,
+        destinationInsurerWithoutBlanks
+      );
+
+      const rowsWithGroupCBL = addGroupAndCondition(
+        rowsToMoveCBL,
+        nextMatchGroup
+      );
+      const rowsWithGroupInsurer = addGroupAndCondition(
+        rowsToMoveInsurer,
+        nextMatchGroup
+      );
+
+      // Add new rows to cleaned destination
+      // Note: We don't re-equalize at destination since we're moving an already-equalized group
+      let newDestinationCBL = [...destinationCBLWithoutBlanks, ...rowsWithGroupCBL];
+      let newDestinationInsurer = [
+        ...destinationInsurerWithoutBlanks,
+        ...rowsWithGroupInsurer,
+      ];
+
+      // Regenerate destination indices
+      const regeneratedDestinationCBL = regenerateIdx(
+        newDestinationCBL,
+        toSection
+      );
+      const regeneratedDestinationInsurer = regenerateIdx(
+        newDestinationInsurer,
+        toSection
+      );
+
+      // Update destination state
+      setters.cbl(regeneratedDestinationCBL);
+      setters.insurer(regeneratedDestinationInsurer);
+
+      // Clear selections
       setSelectedRowCBL([]);
       setSelectedRowInsurer([]);
       triggerClearAllSelections();
-    }
+    },
+    [
+      selectedRowCBL,
+      selectedRowInsurer,
+      exactMatchCBL,
+      exactMatchInsurer,
+      partialMatchCBL,
+      partialMatchInsurer,
+      noMatchCBL,
+      noMatchInsurer,
+      setExactMatchCBL,
+      setExactMatchInsurer,
+      setPartialMatchCBL,
+      setPartialMatchInsurer,
+      setNoMatchCBL,
+      setNoMatchInsurer,
+      setChanges,
+      addToHistory,
+      triggerClearAllSelections,
+      matrix,
+      setMatrix,
+    ]
+  );
+
+  const handleMoveToPartialMatch = async () => {
+    await moveRows("partial", "moveToPartial");
   };
 
   const handleUnmatch = async () => {
+    await moveRows("no-match", "unmatch");
+  };
+
+  // Legacy code below - keeping for reference but should be removed
+  const _handleUnmatch_OLD = async () => {
     console.log("Unmatching rows");
     if (selectedRowCBL.length > 0 && selectedRowInsurer.length > 0) {
       setChanges(true);
@@ -986,6 +1436,11 @@ function Reconciliation() {
   };
 
   const handleMoveToExactMatch = async () => {
+    await moveRows("exact", "moveToExact");
+  };
+
+  // Legacy code below - keeping for reference but should be removed
+  const _handleMoveToExactMatch_OLD = async () => {
     if (selectedRowCBL.length > 0 && selectedRowInsurer.length > 0) {
       setChanges(true);
 
