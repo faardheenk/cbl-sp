@@ -38,7 +38,7 @@ const Header: React.FC = () => {
   const insuranceName = urlParams.get("Insurance");
   const pathParts = window.location.pathname.split("/");
   const pageName = pathParts[pathParts.length - 1].split(".")[0]; // Gets "Reconciliation"
-  console.log("Page name:", pageName);
+  // console.log("Page name:", pageName);
 
   const isSubsite = pageName === "Reconciliation" ? true : false;
 
@@ -69,7 +69,7 @@ const Header: React.FC = () => {
       mergedPartialMatch,
       noMatchCBL,
       noMatchInsurer,
-      insuranceName || ""
+      insuranceName || "",
     );
 
     // Generate filename with current date
@@ -128,7 +128,7 @@ const Header: React.FC = () => {
                 onClick={() => {
                   window.open(
                     `${context.pageContext.web.absoluteUrl}/SitePages/Onboarding Insurance.aspx`,
-                    "_blank"
+                    "_blank",
                   );
                 }}
               >

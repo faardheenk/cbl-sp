@@ -455,35 +455,6 @@ function MatchableDataTable({
     }
   }, [clearSelections, setSelectedRowData, fileType]);
 
-  // Log manually deselected rows to console
-  useEffect(() => {
-    const sideName = fileType === 1 ? "CBL" : "Insurer";
-    if (manuallyDeselectedRowsLocal.length > 0) {
-      console.log(
-        `[Manually Deselected Rows - ${sideName}] Total: ${manuallyDeselectedRowsLocal.length}`,
-      );
-      console.log(
-        `[Manually Deselected Rows - ${sideName}] Row IDs:`,
-        manuallyDeselectedRowsLocal,
-      );
-
-      // Also log the actual row data for better visibility
-      const deselectedRowData = data.filter((row) =>
-        manuallyDeselectedRowsLocal.includes(row.idx),
-      );
-      if (deselectedRowData.length > 0) {
-        console.log(
-          `[Manually Deselected Rows - ${sideName}] Row Data:`,
-          deselectedRowData,
-        );
-      }
-    } else {
-      console.log(
-        `[Manually Deselected Rows - ${sideName}] No manually deselected rows`,
-      );
-    }
-  }, [manuallyDeselectedRowsLocal, fileType, data]);
-
   // Update selected rows when external selection changes
   useEffect(() => {
     // Combine manual selections with external selections
@@ -531,6 +502,22 @@ function MatchableDataTable({
       });
     }
   }, [externalSelectedRows, manuallySelectedRows, data, setSelectedRowData]);
+
+  useEffect(() => {
+    const sideName = fileType === 1 ? "CBL" : "Insurer";
+    const selectedRowObjects = data.filter((row) =>
+      selectedRows.includes(row.idx),
+    );
+    const deselectedRowObjects = data.filter((row) =>
+      manuallyDeselectedRowsLocal.includes(row.idx),
+    );
+
+    console.log(`[Selection Change] ${sideName} Selected Rows:`, selectedRowObjects);
+    console.log(
+      `[Selection Change] ${sideName} Deselected Rows:`,
+      deselectedRowObjects,
+    );
+  }, [selectedRows, manuallyDeselectedRowsLocal, data, fileType]);
 
   // Helper function to parse matched_insurer_indices and calculate target row indices
   const calculateTargetRowIndices = useCallback(
@@ -851,13 +838,6 @@ function MatchableDataTable({
         );
         rowsToToggle = [row.idx, ...rowsWithSameGroup.map((r) => r.idx)];
 
-        // Console log: Count of CBL rows in the group
-        const totalCBLGroupCount = rowsToToggle.length;
-        console.log(`[CBL Group Selection] Group ID: ${row.group_id}`);
-        console.log(
-          `[CBL Group Selection] Total CBL rows in group: ${totalCBLGroupCount} (1 clicked + ${rowsWithSameGroup.length} auto-selected)`,
-        );
-        console.log(`[CBL Group Selection] CBL row indices:`, rowsToToggle);
       }
 
       // Update manual selection state (single update)
@@ -909,30 +889,6 @@ function MatchableDataTable({
           // When SELECTING, auto-select related insurer rows
           const targetIndices = calculateTargetRowIndices(row);
           if (targetIndices.length > 0) {
-            // Console log: Count of Insurer rows auto-selected
-            console.log(`[Insurer Auto-Selection] CBL row idx: ${row.idx}`);
-            console.log(
-              `[Insurer Auto-Selection] Total Insurer rows auto-selected: ${targetIndices.length}`,
-            );
-            console.log(
-              `[Insurer Auto-Selection] Insurer row indices:`,
-              targetIndices,
-            );
-            if (row.matched_insurer_indices) {
-              try {
-                const matchedIndices = JSON.parse(row.matched_insurer_indices);
-                console.log(
-                  `[Insurer Auto-Selection] matched_insurer_indices from CBL row:`,
-                  matchedIndices,
-                );
-              } catch (e) {
-                console.log(
-                  `[Insurer Auto-Selection] matched_insurer_indices (raw):`,
-                  row.matched_insurer_indices,
-                );
-              }
-            }
-
             // Create mappings for all selected rows (including group selections)
             // This ensures that when any row is deselected, others still have mappings
             rowsToToggle.forEach((selectedIdx) => {

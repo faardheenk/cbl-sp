@@ -33,10 +33,6 @@ export const createBlankRow = (template: any, nextMatchGroup: number) => {
 };
 
 export const calculateSum = (ws1: any[], ws2: any[]) => {
-  // console.log("ws1 >", ws1);
-  // console.log("ws2 >", ws2);
-  // console.log("cblColumnMappings >", cblColumnMappings);
-  // console.log("insuranceColumnMappings >", insuranceColumnMappings);
 
   const sum1 = ws1.reduce((acc, row) => {
     const amount = isNaN(row.ProcessedAmount) ? 0 : Number(row.ProcessedAmount);
@@ -48,8 +44,6 @@ export const calculateSum = (ws1: any[], ws2: any[]) => {
     return acc + amount;
   }, 0);
 
-  // console.log("sum 1 >", sum1);
-  // console.log("sum 2 >", sum2);
 
   return { sum1, sum2 };
 };
@@ -66,8 +60,6 @@ export const clearSelectedRows = (
     const selectedIndex = rows.findIndex(
       (row) => row[idKey] === selectedRow[idKey]
     );
-
-    console.log("selectedIndex >>> ", selectedIndex);
 
     if (selectedIndex !== -1) {
       // Add the selected row to removal set
@@ -110,7 +102,12 @@ export const manualMatching = (
   selectedRowsCBL: any[],
   selectedRowsInsurer: any[],
   noMatchInsurer: any[],
-  noMatchCBL?: any[]
+  noMatchCBL?: any[],
+  // NEW PARAMETERS:
+  deselectedCBLRows?: string[],           // Array of CBL row IDs that were deselected
+  deselectedInsurerRows?: string[],       // Array of Insurer row IDs that were deselected
+  allCBLRowsInGroups?: string[],          // All CBL rows in selected groups (full context)
+  allInsurerRowsInGroups?: string[]       // All Insurer rows in selected groups (full context)
 ) => {
   const rowsToRemoveCBL = new Set<number>();
   const rowsToRemoveInsurer = new Set<number>();
@@ -118,9 +115,6 @@ export const manualMatching = (
   const exactMatchInsurerRows: any[] = [];
   const noMatchInsurerRows: any[] = [];
   let cblMatchedIndices = 0;
-
-  console.log("selectedRowsCBL  from utils >>> ", selectedRowsCBL);
-  console.log("selectedRowsInsurer >>> ", selectedRowsInsurer);
 
   // Check if selected rows are from no match section
   const isFromNoMatch =
@@ -133,8 +127,6 @@ export const manualMatching = (
 
   if (isFromNoMatch) {
     // Handle no match to exact match conversion
-    console.log("Processing no match to exact match conversion");
-
     // Remove selected CBL rows from no match
     selectedRowsCBL.forEach((selectedRow) => {
       const selectedIndex = noMatchCBL.findIndex(
@@ -163,26 +155,108 @@ export const manualMatching = (
     return {
       updatedRowsCBL: rowsCBL, // No changes to partial match CBL
       updatedRowsInsurer: rowsInsurer, // No changes to partial match insurer
+      exactMatchCBLRows: selectedRowsCBL, // Selected CBL rows to move to exact
+      exactMatchInsurerRows: selectedRowsInsurer, // Selected Insurer rows to move to exact
       updatedNoMatchInsurer: noMatchInsurer, // Will be updated in calling function
+      updatedNoMatchCBL: noMatchCBL, // No changes for no-match CBL
     };
   } else {
     // Handle partial match to exact match conversion (existing logic)
-    console.log("Processing partial match to exact match conversion");
+    // ============================================
+    // PHASE 2: Filter Orphaned Deselected Rows
+    // ============================================
+    const deselectedCBLSet = new Set(deselectedCBLRows || []);
+    const deselectedInsurerSet = new Set(deselectedInsurerRows || []);
+
+    // Determine deselection type first
+    const hasCBLDeselections = deselectedCBLRows && deselectedCBLRows.length > 0;
+    const hasInsurerDeselections = deselectedInsurerRows && deselectedInsurerRows.length > 0;
+    const isBalanced = hasCBLDeselections && hasInsurerDeselections;
+    const isCBLOnly = hasCBLDeselections && !hasInsurerDeselections;
+    const isInsurerOnly = !hasCBLDeselections && hasInsurerDeselections;
+
+    // Filter out orphaned deselected rows (one-sided only)
+    // Balanced deselected rows are NOT filtered - they stay in partial
+    let filteredRowsCBL = rowsCBL;
+    let filteredRowsInsurer = rowsInsurer;
+
+    if (isCBLOnly) {
+      // Filter out orphaned CBL deselected rows
+      filteredRowsCBL = rowsCBL.filter(
+        (row) => !deselectedCBLSet.has(row.idx)
+      );
+    }
+
+    if (isInsurerOnly) {
+      // Filter out orphaned Insurer deselected rows
+      filteredRowsInsurer = rowsInsurer.filter(
+        (row) => !deselectedInsurerSet.has(row.idx)
+      );
+    }
+
+    // Always filter deselected rows from selected arrays (they shouldn't be selected)
+    const filteredSelectedRowsCBL = selectedRowsCBL.filter(
+      (row) => !deselectedCBLSet.has(row.idx)
+    );
+    const filteredSelectedRowsInsurer = selectedRowsInsurer.filter(
+      (row) => !deselectedInsurerSet.has(row.idx)
+    );
+
+    // ============================================
+    // PHASE 4: Handle Orphaned Rows
+    // ============================================
+    const orphanedCBLRows: any[] = [];
+    const orphanedInsurerRows: any[] = [];
+
+    if (isCBLOnly) {
+      // Find deselected CBL rows in the original array
+      deselectedCBLRows!.forEach((deselectedIdx) => {
+        const row = rowsCBL.find((r) => r.idx === deselectedIdx);
+        if (row) {
+          orphanedCBLRows.push(row);
+        }
+      });
+      
+      // Console log orphaned CBL rows
+      if (orphanedCBLRows.length > 0) {
+        console.log("[Orphaned CBL Rows]", orphanedCBLRows);
+      }
+    }
+
+    if (isInsurerOnly) {
+      // Find deselected Insurer rows in the original array
+      deselectedInsurerRows!.forEach((deselectedIdx) => {
+        const row = rowsInsurer.find((r) => r.idx === deselectedIdx);
+        if (row) {
+          orphanedInsurerRows.push(row);
+        }
+      });
+      
+      // Console log orphaned Insurer rows
+      if (orphanedInsurerRows.length > 0) {
+        console.log("[Orphaned Insurer Rows]", orphanedInsurerRows);
+      }
+    }
+    
+    // Log if no orphaned rows
+    if (orphanedCBLRows.length === 0 && orphanedInsurerRows.length === 0) {
+      console.log("[Orphaned Rows] None");
+    }
 
     // Build a set of selected CBL row indices for quick lookup
     const selectedCBLIndices = new Set(
-      selectedRowsCBL.map((row) => row.idx)
+      filteredSelectedRowsCBL.map((row) => row.idx)
     );
 
-    // Remove CBL rows - ONLY rows that are actually selected
-    selectedRowsCBL.forEach((selectedRow) => {
-      const selectedIndex = rowsCBL.findIndex(
+    // Remove CBL rows - ONLY rows that are actually selected (use filtered selected rows)
+    filteredSelectedRowsCBL.forEach((selectedRow) => {
+      const selectedIndex = filteredRowsCBL.findIndex(
         (row) => row["idx"] === selectedRow["idx"]
       );
 
       if (selectedIndex !== -1) {
         rowsToRemoveCBL.add(selectedIndex);
-        const row = rowsCBL[selectedIndex];
+        const row = filteredRowsCBL[selectedIndex];
 
         // CRITICAL FIX: Only remove adjacent rows if they are also selected
         // This prevents removing unselected rows that were auto-selected by group_id
@@ -195,8 +269,8 @@ export const manualMatching = (
               const additionalRowsToRemove = matchedIndices.length - 1;
               for (let i = 1; i <= additionalRowsToRemove; i++) {
                 const nextIndex = selectedIndex + i;
-                if (nextIndex < rowsCBL.length) {
-                  const nextRow = rowsCBL[nextIndex];
+                if (nextIndex < filteredRowsCBL.length) {
+                  const nextRow = filteredRowsCBL[nextIndex];
                   // Only remove if this row is also in the selected set
                   if (selectedCBLIndices.has(nextRow.idx)) {
                     rowsToRemoveCBL.add(nextIndex);
@@ -211,12 +285,12 @@ export const manualMatching = (
       }
     });
 
-    if (selectedRowsCBL.length === selectedRowsInsurer.length) {
+    if (filteredSelectedRowsCBL.length === filteredSelectedRowsInsurer.length) {
       // For each pair, check matched_insurer_indices from CBL row
-      for (let i = 0; i < selectedRowsCBL.length; i++) {
-        const cblRow = selectedRowsCBL[i];
-        const insurerRow = selectedRowsInsurer[i];
-        const insurerIndex = rowsInsurer.findIndex(
+      for (let i = 0; i < filteredSelectedRowsCBL.length; i++) {
+        const cblRow = filteredSelectedRowsCBL[i];
+        const insurerRow = filteredSelectedRowsInsurer[i];
+        const insurerIndex = filteredRowsInsurer.findIndex(
           (row) => row["idx"] === insurerRow["idx"]
         );
 
@@ -244,14 +318,14 @@ export const manualMatching = (
           // Move the current selected insurer row to exact match
           if (insurerIndex !== -1) {
             rowsToRemoveInsurer.add(insurerIndex);
-            exactMatchInsurerRows.push(rowsInsurer[insurerIndex]);
+            exactMatchInsurerRows.push(filteredRowsInsurer[insurerIndex]);
           }
           // Move the next (matchedIndices.length - 1) rows after the selected insurer row to no match insurer
           for (let j = 1; j < matchedIndices.length; j++) {
             const nextIndex = insurerIndex + j;
-            if (nextIndex < rowsInsurer.length) {
+            if (nextIndex < filteredRowsInsurer.length) {
               rowsToRemoveInsurer.add(nextIndex);
-              noMatchInsurerRows.push(rowsInsurer[nextIndex]);
+              noMatchInsurerRows.push(filteredRowsInsurer[nextIndex]);
             }
           }
         } else {
@@ -259,12 +333,12 @@ export const manualMatching = (
           // CRITICAL FIX: Only remove insurer rows that are actually selected
           if (insurerIndex !== -1) {
             const selectedInsurerIndices = new Set(
-              selectedRowsInsurer.map((row) => row.idx)
+              filteredSelectedRowsInsurer.map((row) => row.idx)
             );
             for (let j = 0; j < n; j++) {
               const idxToRemove = insurerIndex + j;
-              if (idxToRemove < rowsInsurer.length) {
-                const insurerRow = rowsInsurer[idxToRemove];
+              if (idxToRemove < filteredRowsInsurer.length) {
+                const insurerRow = filteredRowsInsurer[idxToRemove];
                 // Only remove if this row is actually selected
                 if (selectedInsurerIndices.has(insurerRow.idx)) {
                   rowsToRemoveInsurer.add(idxToRemove);
@@ -277,27 +351,27 @@ export const manualMatching = (
       }
     } else {
       // If not equal, move the selected insurer rows to exact match and remaining to no match
-      selectedRowsCBL.forEach((cblRow) => {
+      filteredSelectedRowsCBL.forEach((cblRow) => {
         if (cblRow.matched_insurer_indices) {
           try {
             const matchedIndices = JSON.parse(cblRow.matched_insurer_indices);
             if (Array.isArray(matchedIndices)) {
               // Find the first selected insurer row to get the starting position
-              const firstSelectedInsurerRow = selectedRowsInsurer[0];
-              const insurerIndex = rowsInsurer.findIndex(
+              const firstSelectedInsurerRow = filteredSelectedRowsInsurer[0];
+              const insurerIndex = filteredRowsInsurer.findIndex(
                 (row) => row["idx"] === firstSelectedInsurerRow["idx"]
               );
 
               if (insurerIndex !== -1) {
                 // Move selected insurer rows to exact match
-                selectedRowsInsurer.forEach((insurerRow) => {
-                  const selectedInsurerIndex = rowsInsurer.findIndex(
+                filteredSelectedRowsInsurer.forEach((insurerRow) => {
+                  const selectedInsurerIndex = filteredRowsInsurer.findIndex(
                     (row) => row["idx"] === insurerRow["idx"]
                   );
                   if (selectedInsurerIndex !== -1) {
                     rowsToRemoveInsurer.add(selectedInsurerIndex);
                     exactMatchInsurerRows.push(
-                      rowsInsurer[selectedInsurerIndex]
+                      filteredRowsInsurer[selectedInsurerIndex]
                     );
                   }
                 });
@@ -306,15 +380,15 @@ export const manualMatching = (
                 // Use array positions: insurerIndex + 1, insurerIndex + 2, ..., insurerIndex + (matchedIndices.length - 1)
                 for (let j = 1; j < matchedIndices.length; j++) {
                   const nextIndex = insurerIndex + j;
-                  if (nextIndex < rowsInsurer.length) {
+                  if (nextIndex < filteredRowsInsurer.length) {
                     // Check if this row is not already selected
-                    const isSelected = selectedRowsInsurer.some(
+                    const isSelected = filteredSelectedRowsInsurer.some(
                       (selectedRow) =>
-                        selectedRow["idx"] === rowsInsurer[nextIndex]["idx"]
+                        selectedRow["idx"] === filteredRowsInsurer[nextIndex]["idx"]
                     );
                     if (!isSelected) {
                       rowsToRemoveInsurer.add(nextIndex);
-                      noMatchInsurerRows.push(rowsInsurer[nextIndex]);
+                      noMatchInsurerRows.push(filteredRowsInsurer[nextIndex]);
                     }
                   }
                 }
@@ -330,20 +404,116 @@ export const manualMatching = (
       });
     }
 
-    const updatedRowsCBL = rowsCBL.filter(
-      (_, index) => !rowsToRemoveCBL.has(index)
-    );
-    const updatedRowsInsurer = rowsInsurer.filter(
-      (_, index) => !rowsToRemoveInsurer.has(index)
+    // ============================================
+    // PHASE 5: Separate Selected vs Deselected vs Remaining Rows
+    // ============================================
+    // Rows to move to exact match (selected rows that were removed)
+    // Get the actual row objects from filteredRowsCBL based on indices in rowsToRemoveCBL
+    const exactMatchCBLRows = filteredRowsCBL.filter(
+      (row, index) => rowsToRemoveCBL.has(index)
     );
 
-    // Add any new no match insurer rows to the noMatchInsurer array
-    const updatedNoMatchInsurer = [...noMatchInsurer, ...noMatchInsurerRows];
+    // Console log CBL rows moving to exact match
+    if (exactMatchCBLRows.length > 0) {
+    } else {
+    }
+
+    // Console log Insurer rows moving to exact match
+    if (exactMatchInsurerRows.length > 0) {
+    } else {
+    }
+
+    // Rows staying in partial:
+    // - Balanced deselected rows (both sides deselected)
+    // - Non-selected, non-deselected rows
+    const remainingPartialCBLRows = filteredRowsCBL.filter(
+      (row, index) => !rowsToRemoveCBL.has(index) // Not selected (includes deselected and non-selected)
+    );
+    const remainingPartialInsurerRows = filteredRowsInsurer.filter(
+      (row, index) => !rowsToRemoveInsurer.has(index) // Not selected (includes deselected and non-selected)
+    );
+
+    // ============================================
+    // PHASE 5: Repair matched_insurer_indices for Balanced Deselected Rows
+    // ============================================
+    if (isBalanced && remainingPartialCBLRows.length > 0) {
+      // Group remaining CBL rows by their original matched_insurer_indices or group_id
+      const groupToCBLRows = new Map<string, any[]>();
+      
+      remainingPartialCBLRows.forEach((cblRow) => {
+        // Use group_id if available, otherwise use matched_insurer_indices as group key
+        const groupKey = cblRow.group_id || cblRow.matched_insurer_indices || 'default';
+        if (!groupToCBLRows.has(groupKey)) {
+          groupToCBLRows.set(groupKey, []);
+        }
+        groupToCBLRows.get(groupKey)!.push(cblRow);
+      });
+      
+      // For each group, find corresponding remaining insurer rows
+      groupToCBLRows.forEach((cblRows, groupKey) => {
+        // Get the first CBL row's original matched_insurer_indices to understand the group
+        const firstCBLRow = cblRows[0];
+        let originalMatchedIndices: number[] = [];
+        if (firstCBLRow.matched_insurer_indices) {
+          try {
+            originalMatchedIndices = JSON.parse(firstCBLRow.matched_insurer_indices);
+          } catch (e) {
+            console.warn("Failed to parse matched_insurer_indices:", e);
+          }
+        }
+        
+        // Find corresponding insurer rows that are also staying in partial
+        // For balanced deselections, we need to count how many insurer rows remain in this group
+        // This is a simplified approach - ideally we'd use allInsurerRowsInGroups context for precise mapping
+        
+        // Calculate remaining insurer count for this group
+        // Original count minus deselected count (if they're from this group)
+        let remainingInsurerCount = originalMatchedIndices.length;
+        
+        // If we have context about all insurer rows in groups, use it
+        if (allInsurerRowsInGroups && allInsurerRowsInGroups.length > 0) {
+          // Count how many insurer rows from this group are staying in partial
+          // This is a placeholder - needs proper group matching logic
+          remainingInsurerCount = Math.max(
+            1, // At least 1 (the deselected one stays in balanced case)
+            originalMatchedIndices.length
+          );
+        } else {
+          // Simplified: For balanced deselections, assume 1:1 relationship for remaining rows
+          // This is a heuristic - may need refinement
+          remainingInsurerCount = Math.max(
+            1, // At least 1 insurer row remains (the deselected one)
+            originalMatchedIndices.length - (deselectedInsurerRows?.length || 0) + 1
+          );
+        }
+        
+        // Update matched_insurer_indices for all CBL rows in this group
+        const newMatchedIndices = Array.from({ length: remainingInsurerCount }, (_, i) => i);
+        cblRows.forEach((cblRow) => {
+          cblRow.matched_insurer_indices = JSON.stringify(newMatchedIndices);
+        });
+      });
+    }
+
+    const uniqueExactMatchInsurerRows = Array.from(
+      new Map(exactMatchInsurerRows.map((row) => [row.idx, row])).values(),
+    );
+
+    // Add orphaned rows to no-match
+    const updatedNoMatchCBL = orphanedCBLRows.length > 0 
+      ? [...(noMatchCBL || []), ...orphanedCBLRows]
+      : noMatchCBL;
+    const updatedNoMatchInsurer = [...noMatchInsurer, ...noMatchInsurerRows, ...orphanedInsurerRows];
+
+    // Final summary log
 
     return {
-      updatedRowsCBL,
-      updatedRowsInsurer,
+      updatedRowsCBL: remainingPartialCBLRows, // Rows staying in partial (with repaired indices if balanced)
+      updatedRowsInsurer: remainingPartialInsurerRows,
+      exactMatchCBLRows, // Selected CBL rows to move to exact
+      exactMatchInsurerRows: uniqueExactMatchInsurerRows, // Selected Insurer rows to move to exact
       updatedNoMatchInsurer,
+      updatedNoMatchCBL, // For orphaned CBL rows
     };
   }
 };
