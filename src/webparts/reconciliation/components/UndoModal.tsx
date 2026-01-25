@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogSurface,
@@ -23,7 +23,34 @@ import styles from "./Reconciliation.module.scss";
 const undoModalStyles = `
   /* Modal surface background */
   .undo-modal-surface {
-    background-color: #f8fafc !important;
+    background-color: #ffffff !important;
+  }
+
+  .fui-DialogBackdrop,
+  .fui-Dialog__backdrop {
+    background-color: rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: blur(25px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(25px) saturate(180%) !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9998 !important;
+  }
+
+  /* Ensure the dialog surface is above the backdrop */
+  .undo-modal-surface {
+    position: relative !important;
+    z-index: 9999 !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* Prevent body scroll when modal is open */
+  body.undo-modal-open {
+    overflow: hidden !important;
   }
 
   .undo-modal-table .ant-table {
@@ -61,35 +88,19 @@ const undoModalStyles = `
     max-width: 100px !important;
   }
   
-  .undo-modal-table .ant-table-tbody > tr:hover > td {
-    background-color: #f1f5f9 !important;
-  }
-
-  .undo-modal-table .ant-table-tbody > tr:nth-child(even) > td {
-    background-color: #f9fafb !important;
-  }
-
-  .undo-modal-table .ant-table-tbody > tr:nth-child(even):hover > td {
-    background-color: #f1f5f9 !important;
-  }
 
   .undo-action-card {
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     margin-bottom: 12px;
     overflow: hidden;
-    transition: all 0.2s ease;
+    transition: border-color 0.2s ease;
     background-color: #ffffff;
   }
 
-  .undo-action-card:hover {
-    border-color: #0078d4;
-    box-shadow: 0 2px 8px rgba(0, 120, 212, 0.15);
-  }
-
+  .undo-action-card:hover,
   .undo-action-card.selected {
     border-color: #0078d4;
-    background-color: #f0f7ff;
   }
 
   .undo-action-header {
@@ -97,7 +108,7 @@ const undoModalStyles = `
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    background-color: #ffffff;
     border-bottom: 1px solid #e2e8f0;
   }
 
@@ -153,7 +164,7 @@ const undoModalStyles = `
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
-    background-color: #f8fafc;
+    background-color: #ffffff;
   }
 
   .undo-table-section {
@@ -174,19 +185,15 @@ const undoModalStyles = `
   .undo-table-count {
     font-size: 11px;
     color: #0078d4;
-    background-color: #e0f2fe;
-    padding: 2px 8px;
-    border-radius: 10px;
   }
 
   .undo-summary-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
-    background-color: #e2e8f0;
-    border-radius: 4px;
-    margin-top: 4px;
+    padding: 8px 0;
+    border-top: 1px solid #e2e8f0;
+    margin-top: 6px;
   }
 
   .undo-summary-label {
@@ -221,8 +228,20 @@ type UndoModalProps = {
 function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
   const { actionHistory } = useReconciliation();
   const [selectedActions, setSelectedActions] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
+
+  // Blur the entire page when dialog is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add("undo-modal-open");
+    } else {
+      document.body.classList.remove("undo-modal-open");
+    }
+    return () => {
+      document.body.classList.remove("undo-modal-open");
+    };
+  }, [isOpen]);
 
   // Default columns for CBL
   const defaultCblColumns: ColumnsType = [
@@ -329,7 +348,7 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
   };
 
   const getActionTypeLabel = (
-    actionType: ActionHistoryItem["actionType"]
+    actionType: ActionHistoryItem["actionType"],
   ): string => {
     switch (actionType) {
       case "moveToExact":
@@ -375,7 +394,7 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
   const sortedHistory = useMemo(() => {
     return [...actionHistory].sort(
       (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
   }, [actionHistory]);
 
@@ -386,13 +405,11 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
         style={{
           maxWidth: "1100px",
           width: "95vw",
-          backgroundColor: "#f8fafc",
         }}
       >
-        <DialogBody style={{ backgroundColor: "#f8fafc" }}>
+        <DialogBody>
           <DialogTitle
             style={{
-              backgroundColor: "#ffffff",
               borderBottom: "1px solid #e2e8f0",
               padding: "16px 24px",
             }}
@@ -428,7 +445,6 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
               padding: "16px",
               maxHeight: "60vh",
               overflowY: "auto",
-              backgroundColor: "#f1f5f9",
             }}
           >
             {actionHistory.length === 0 ? (
@@ -437,7 +453,6 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
                   textAlign: "center",
                   padding: "40px 20px",
                   color: "#64748b",
-                  backgroundColor: "#ffffff",
                   borderRadius: "8px",
                   border: "1px solid #e2e8f0",
                 }}
@@ -462,26 +477,36 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
                     alignItems: "center",
                     justifyContent: "space-between",
                     marginBottom: "16px",
-                    padding: "12px 16px",
-                    backgroundColor: "#ffffff",
-                    borderRadius: "8px",
+                    padding: "8px 0",
                     border: "1px solid #e2e8f0",
-                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+                    borderWidth: "0 0 1px 0",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
                     <Checkbox
                       checked={
                         selectedActions.size === actionHistory.length
                           ? true
                           : selectedActions.size > 0
-                          ? "mixed"
-                          : false
+                            ? "mixed"
+                            : false
                       }
                       onChange={handleSelectAll}
                       style={{ marginTop: "0" }}
                     />
-                    <span style={{ fontWeight: 600, fontSize: "13px", lineHeight: "1" }}>
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        fontSize: "13px",
+                        lineHeight: "1",
+                      }}
+                    >
                       Select All Actions ({selectedActions.size} of{" "}
                       {actionHistory.length} selected)
                     </span>
@@ -520,7 +545,7 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
                           {getActionTypeLabel(action.actionType)}
                           <span
                             className={`undo-action-badge ${getSectionBadgeClass(
-                              action.fromSection
+                              action.fromSection,
                             )}`}
                           >
                             {action.fromSection}
@@ -528,7 +553,7 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
                           <span style={{ color: "#94a3b8" }}>→</span>
                           <span
                             className={`undo-action-badge ${getSectionBadgeClass(
-                              action.toSection
+                              action.toSection,
                             )}`}
                           >
                             {action.toSection}
@@ -614,7 +639,6 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
 
           <DialogActions
             style={{
-              backgroundColor: "#ffffff",
               borderTop: "1px solid #e2e8f0",
               padding: "16px 24px",
               gap: "12px",
@@ -640,13 +664,17 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
               disabled={selectedActions.size === 0}
               onClick={handleUndo}
               style={{
-                backgroundColor: selectedActions.size === 0 ? "#94a3b8" : "#0078d4",
+                backgroundColor:
+                  selectedActions.size === 0 ? "#94a3b8" : "#0078d4",
                 border: "none",
                 color: "#ffffff",
                 fontWeight: 600,
                 padding: "8px 20px",
                 minWidth: "160px",
-                boxShadow: selectedActions.size === 0 ? "none" : "0 2px 4px rgba(0, 120, 212, 0.3)",
+                boxShadow:
+                  selectedActions.size === 0
+                    ? "none"
+                    : "0 2px 4px rgba(0, 120, 212, 0.3)",
               }}
             >
               Undo Selected ({selectedActions.size})

@@ -397,13 +397,6 @@ function Reconciliation() {
     noMatchInsurer,
   ]);
 
-  useEffect(() => {
-    console.log("[Updated] Partial Match CBL:", partialMatchCBL);
-    console.log("[Updated] Partial Match Insurer:", partialMatchInsurer);
-    console.log("[Updated] No Match CBL:", noMatchCBL);
-    console.log("[Updated] No Match Insurer:", noMatchInsurer);
-  }, [partialMatchCBL, partialMatchInsurer, noMatchCBL, noMatchInsurer]);
-
   // Unified function to move rows between sections
   const moveRows = useCallback(
     async (
@@ -497,30 +490,6 @@ function Reconciliation() {
       const destination = getDestinationArrays();
       const setters = getSetters();
 
-      // Get indices for history
-      const getIndices = (sourceArray: any[]) => {
-        return selectedRowCBL
-          .map((selectedRow) =>
-            sourceArray.findIndex((row) => row.idx === selectedRow.idx),
-          )
-          .filter((idx) => idx !== -1);
-      };
-
-      const cblRowIndices = getIndices(source.cbl);
-      const insurerRowIndices = getIndices(source.insurer);
-
-      // Add to history
-      addToHistory({
-        actionType,
-        fromSection,
-        toSection,
-        cblRows: [...selectedRowCBL],
-        insurerRows: [...selectedRowInsurer],
-        cblRowIndices,
-        insurerRowIndices,
-        matrixKey,
-      });
-
       // Helper to check if a row is blank
       const isBlankRow = (row: any): boolean => {
         return !row.ProcessedAmount || row.ProcessedAmount === "";
@@ -557,6 +526,8 @@ function Reconciliation() {
       let updatedSourceInsurer: any[];
       let rowsToMoveCBL: any[];
       let rowsToMoveInsurer: any[];
+      let cblRowIndices: number[] = [];
+      let insurerRowIndices: number[] = [];
 
       if (fromSection === "exact") {
         // For exact matches, only remove rows that are actually selected
@@ -739,12 +710,20 @@ function Reconciliation() {
         );
 
         // Get rows to move - includes blank rows that were part of equalization
-        rowsToMoveCBL = source.cbl.filter((_, index) =>
-          finalRowsToRemoveCBL.has(index),
-        );
-        rowsToMoveInsurer = source.insurer.filter((_, index) =>
-          finalRowsToRemoveInsurer.has(index),
-        );
+        rowsToMoveCBL = source.cbl.filter((_, index) => {
+          if (!finalRowsToRemoveCBL.has(index)) {
+            return false;
+          }
+          cblRowIndices.push(index);
+          return true;
+        });
+        rowsToMoveInsurer = source.insurer.filter((_, index) => {
+          if (!finalRowsToRemoveInsurer.has(index)) {
+            return false;
+          }
+          insurerRowIndices.push(index);
+          return true;
+        });
       } else {
         // For partial and no-match, find indices of selected rows
         const selectedCBLIndices: number[] = [];
@@ -856,13 +835,33 @@ function Reconciliation() {
         );
 
         // Get rows to move - includes blank rows for partial matches
-        rowsToMoveCBL = source.cbl.filter((_, index) =>
-          cblIndicesToRemove.has(index),
-        );
-        rowsToMoveInsurer = source.insurer.filter((_, index) =>
-          insurerIndicesToRemove.has(index),
-        );
+        rowsToMoveCBL = source.cbl.filter((_, index) => {
+          if (!cblIndicesToRemove.has(index)) {
+            return false;
+          }
+          cblRowIndices.push(index);
+          return true;
+        });
+        rowsToMoveInsurer = source.insurer.filter((_, index) => {
+          if (!insurerIndicesToRemove.has(index)) {
+            return false;
+          }
+          insurerRowIndices.push(index);
+          return true;
+        });
       }
+
+      // Add to history (use full rowsToMove snapshot, including blank rows)
+      addToHistory({
+        actionType,
+        fromSection,
+        toSection,
+        cblRows: rowsToMoveCBL,
+        insurerRows: rowsToMoveInsurer,
+        cblRowIndices,
+        insurerRowIndices,
+        matrixKey,
+      });
 
       // Handle special case: partial to exact (uses manualMatching)
       if (fromSection === "partial" && toSection === "exact") {

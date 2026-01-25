@@ -3,11 +3,17 @@ import React, { createContext, useContext, useState } from "react";
 // import { useSpContext } from "../SpContext";
 
 export interface Task {
-  date: string;
+  date?: string;
   insurance: string;
-  status: "Pending" | "In Progress" | "Manual Review" | "Completed" | "Failed";
-  url: string;
-  createdDate: Date;
+  status?: "Pending" | "In Progress" | "Manual Review" | "Completed" | "Failed";
+  url?: string;
+  createdDate?: Date;
+  // Folder navigation properties
+  name?: string;
+  isFolder?: boolean;
+  serverRelativeUrl?: string;
+  path?: string;
+  hasSubFolders?: boolean;
 }
 
 interface TaskContextType {

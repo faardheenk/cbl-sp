@@ -660,12 +660,7 @@ function MatchableDataTable({
       // Can unmatch from exact or partial
       items.push({
         key: "unmatch",
-        label: (
-          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "14px" }}>🔗</span>
-            Unmatch
-          </span>
-        ),
+        label: "Unmatch",
         onClick: (e) => {
           e.domEvent.stopPropagation();
           onUnmatch?.();
@@ -677,12 +672,7 @@ function MatchableDataTable({
       // Can move to exact match from no-match or partial
       items.push({
         key: "moveToExact",
-        label: (
-          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "14px" }}>✓</span>
-            Move to Exact Match
-          </span>
-        ),
+        label: "Move to Exact Match",
         onClick: (e) => {
           e.domEvent.stopPropagation();
           onMoveToExactMatch?.();
@@ -694,12 +684,7 @@ function MatchableDataTable({
       // Can move to partial match from no-match
       items.push({
         key: "moveToPartial",
-        label: (
-          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "14px" }}>≈</span>
-            Move to Partial Match
-          </span>
-        ),
+        label: "Move to Partial Match",
         onClick: (e) => {
           e.domEvent.stopPropagation();
           onMoveToPartialMatch?.();
@@ -1142,127 +1127,149 @@ function MatchableDataTable({
         style={{
           margin: "8px",
           marginBottom: "12px",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
         }}
       >
-        <Input
-          placeholder={
-            fileType === 1
-              ? "Search in CBL table..."
-              : "Search in Insurer table..."
-          }
-          prefix={<SearchOutlined />}
-          value={searchText}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          allowClear
+        {/* Top row: Search and navigation controls */}
+        <div
           style={{
-            maxWidth: "300px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginBottom: "8px",
           }}
-        />
-        {fileType === 1 && (
-          <Tooltip
-            title={
-              syncScrollEnabled
-                ? "Disable synchronized scrolling"
-                : "Enable synchronized scrolling"
+        >
+          <Input
+            placeholder={
+              fileType === 1
+                ? "Search in CBL table..."
+                : "Search in Insurer table..."
             }
-          >
-            <Button
-              type={syncScrollEnabled ? "primary" : "default"}
-              icon={<LinkOutlined />}
-              size="small"
-              onClick={() => onSyncScrollChange?.(!syncScrollEnabled)}
-            >
-              {syncScrollEnabled ? "Sync Scroll: ON" : "Sync Scroll: OFF"}
-            </Button>
-          </Tooltip>
-        )}
-        {selectedRows.length > 0 && (
-          <>
-            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-              <Tooltip title="Navigate to previous selected row">
-                <Button
-                  type="default"
-                  icon={<UpOutlined />}
-                  size="small"
-                  onClick={navigateToPrevious}
-                  disabled={
-                    selectedRows.length === 0 ||
-                    (currentNavigationIndex >= 0 &&
-                      currentNavigationIndex === 0)
-                  }
-                />
-              </Tooltip>
-              <Tooltip
-                title={`${selectedRows.length} selected row${
-                  selectedRows.length > 1 ? "s" : ""
-                }`}
-              >
+            prefix={<SearchOutlined />}
+            value={searchText}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            allowClear
+            style={{
+              maxWidth: "300px",
+            }}
+          />
+          {selectedRows.length > 0 && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <Tooltip title="Navigate to previous selected row">
+                  <Button
+                    type="default"
+                    icon={<UpOutlined />}
+                    size="small"
+                    onClick={navigateToPrevious}
+                    disabled={
+                      selectedRows.length === 0 ||
+                      (currentNavigationIndex >= 0 &&
+                        currentNavigationIndex === 0)
+                    }
+                  />
+                </Tooltip>
+                <Tooltip
+                  title={`${selectedRows.length} selected row${
+                    selectedRows.length > 1 ? "s" : ""
+                  }`}
+                >
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#666",
+                      padding: "0 8px",
+                      minWidth: "60px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {currentNavigationIndex >= 0
+                      ? `${currentNavigationIndex + 1}/${selectedRows.length}`
+                      : `1/${selectedRows.length}`}
+                  </span>
+                </Tooltip>
+                <Tooltip title="Navigate to next selected row">
+                  <Button
+                    type="default"
+                    icon={<DownOutlined />}
+                    size="small"
+                    onClick={navigateToNext}
+                    disabled={
+                      selectedRows.length === 0 ||
+                      (currentNavigationIndex >= 0 &&
+                        currentNavigationIndex === selectedRows.length - 1)
+                    }
+                  />
+                </Tooltip>
+              </div>
+              <Tooltip title="Subtotal of selected rows">
                 <span
                   style={{
-                    fontSize: "12px",
-                    color: "#666",
-                    padding: "0 8px",
-                    minWidth: "60px",
-                    textAlign: "center",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    color: "#1890ff",
+                    padding: "4px 12px",
+                    backgroundColor: "#e6f7ff",
+                    borderRadius: "4px",
+                    border: "1px solid #91d5ff",
                   }}
                 >
-                  {currentNavigationIndex >= 0
-                    ? `${currentNavigationIndex + 1}/${selectedRows.length}`
-                    : `1/${selectedRows.length}`}
+                  Subtotal: Rs{" "}
+                  {selectedRowsSubtotal.toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
               </Tooltip>
-              <Tooltip title="Navigate to next selected row">
-                <Button
-                  type="default"
-                  icon={<DownOutlined />}
-                  size="small"
-                  onClick={navigateToNext}
-                  disabled={
-                    selectedRows.length === 0 ||
-                    (currentNavigationIndex >= 0 &&
-                      currentNavigationIndex === selectedRows.length - 1)
-                  }
-                />
-              </Tooltip>
-            </div>
-            {fileType === 1 && (
-              <Tooltip title="Deselect all selected rows">
-                <Button
-                  type="default"
-                  icon={<CloseOutlined />}
-                  size="small"
-                  onClick={handleDeselectAll}
-                  disabled={selectedRows.length === 0}
-                  danger
-                >
-                  Deselect All
-                </Button>
-              </Tooltip>
-            )}
-            <Tooltip title="Subtotal of selected rows">
-              <span
+            </>
+          )}
+        </div>
+        {/* Bottom row: Sync Scroll and Deselect All buttons */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            minHeight: "32px", // Ensure consistent height for alignment
+          }}
+        >
+          {fileType === 1 && (
+            <Tooltip
+              title={
+                syncScrollEnabled
+                  ? "Disable synchronized scrolling"
+                  : "Enable synchronized scrolling"
+              }
+            >
+              <Button
+                type={syncScrollEnabled ? "primary" : "default"}
+                size="small"
+                onClick={() => onSyncScrollChange?.(!syncScrollEnabled)}
                 style={{
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  color: "#1890ff",
-                  padding: "4px 12px",
-                  backgroundColor: "#e6f7ff",
-                  borderRadius: "4px",
-                  border: "1px solid #91d5ff",
+                  backgroundColor: syncScrollEnabled ? "#1890ff" : undefined,
+                  borderColor: syncScrollEnabled ? "#1890ff" : undefined,
                 }}
               >
-                Subtotal: Rs{" "}
-                {selectedRowsSubtotal.toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
+                Sync Scroll
+              </Button>
             </Tooltip>
-          </>
-        )}
+          )}
+          {selectedRows.length > 0 && fileType === 1 && (
+            <Tooltip title="Deselect all selected rows">
+              <Button
+                type="default"
+                icon={<CloseOutlined />}
+                size="small"
+                onClick={handleDeselectAll}
+                disabled={selectedRows.length === 0}
+                danger
+              >
+                Deselect All
+              </Button>
+            </Tooltip>
+          )}
+          {/* Spacer for fileType 2 to maintain alignment */}
+          {fileType === 2 && <div style={{ minHeight: "32px" }} />}
+        </div>
         {searchText && (
           <span
             style={{
