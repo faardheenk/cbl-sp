@@ -23,6 +23,7 @@ import {
   filterOutSelectedRows,
   getNextMatchGroup,
   manualMatching,
+  repairMatchedIndicesAfterUndo,
 } from "../../../utils/utils";
 import { generateMatrixKeys } from "../../../utils/generateMatrixKeys";
 import { regenerateIdx } from "../../../utils/filterData";
@@ -224,6 +225,13 @@ function Reconciliation() {
         }
       });
 
+      // Check if any undone action was a move from partial to exact
+      // If so, we need to repair match_insurer_indices for the restored partial match rows
+      const hasPartialToExactUndo = actionsToUndo.some(
+        (action) =>
+          action.actionType === "moveToExact" && action.fromSection === "partial",
+      );
+
       // Regenerate indices for all affected sections
       const regeneratedExactMatchCBL = regenerateIdx(
         currentExactMatchCBL,
@@ -233,7 +241,7 @@ function Reconciliation() {
         currentExactMatchInsurer,
         "exact",
       );
-      const regeneratedPartialMatchCBL = regenerateIdx(
+      let regeneratedPartialMatchCBL = regenerateIdx(
         currentPartialMatchCBL,
         "partial",
       );
@@ -241,6 +249,15 @@ function Reconciliation() {
         currentPartialMatchInsurer,
         "partial",
       );
+
+      // Repair match_insurer_indices if we undid a partial to exact move
+      if (hasPartialToExactUndo) {
+        regeneratedPartialMatchCBL = repairMatchedIndicesAfterUndo(
+          regeneratedPartialMatchCBL,
+          regeneratedPartialMatchInsurer,
+        );
+      }
+
       const regeneratedNoMatchCBL = regenerateIdx(
         currentNoMatchCBL,
         "no-match",

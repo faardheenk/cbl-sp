@@ -655,6 +655,121 @@ export const manualMatching = (
   }
 };
 
+/**
+ * Repairs match_insurer_indices for partial match rows after undo
+ * This is needed when restoring rows from exact back to partial match,
+ * as the match_insurer_indices need to be recomputed to reflect the restored group structure
+ */
+export const repairMatchedIndicesAfterUndo = (
+  partialMatchCBL: any[],
+  partialMatchInsurer: any[],
+): any[] => {
+  if (!partialMatchCBL || partialMatchCBL.length === 0) {
+    return partialMatchCBL;
+  }
+
+  // Helper function to get target insurer indices for a CBL row
+  const getTargetInsurerIdxs = (
+    cblRow: any,
+    allCblRows: any[],
+  ): string[] => {
+    if (
+      !cblRow?.matched_insurer_indices ||
+      typeof cblRow.matched_insurer_indices !== "string"
+    ) {
+      return [];
+    }
+
+    try {
+      const indices = JSON.parse(cblRow.matched_insurer_indices);
+      if (!Array.isArray(indices)) {
+        return [];
+      }
+
+      const currentIdx = cblRow.idx;
+      const prefix = currentIdx.replace(/[0-9]+/, "");
+      const rowsWithSameIndices = allCblRows.filter(
+        (row) =>
+          row.matched_insurer_indices === cblRow.matched_insurer_indices,
+      );
+
+      if (rowsWithSameIndices.length === 0) {
+        return [];
+      }
+
+      const firstMatchingRow = rowsWithSameIndices.reduce((first, current) => {
+        const firstNumeric = parseInt(first.idx.replace(/[^0-9]/g, ""), 10);
+        const currentNumeric = parseInt(
+          current.idx.replace(/[^0-9]/g, ""),
+          10,
+        );
+        return currentNumeric < firstNumeric ? current : first;
+      });
+
+      const baseRowNumericPart = firstMatchingRow.idx.replace(/[^0-9]/g, "");
+      const baseIndex = parseInt(baseRowNumericPart, 10);
+      if (isNaN(baseIndex)) {
+        return [];
+      }
+
+      const targetIdxs: string[] = [];
+      for (let i = 0; i < indices.length; i++) {
+        targetIdxs.push(`${prefix}${baseIndex + i}`);
+      }
+
+      return targetIdxs;
+    } catch (e) {
+      return [];
+    }
+  };
+
+  // Group CBL rows by their group_id or matched_insurer_indices
+  const groupToCBLRows = new Map<string, any[]>();
+
+  partialMatchCBL.forEach((cblRow) => {
+    // Use group_id if available, otherwise use matched_insurer_indices as group key
+    const groupKey =
+      cblRow.group_id || cblRow.matched_insurer_indices || "default";
+    if (!groupToCBLRows.has(groupKey)) {
+      groupToCBLRows.set(groupKey, []);
+    }
+    groupToCBLRows.get(groupKey)!.push(cblRow);
+  });
+
+  // For each group, find corresponding insurer rows and recompute indices
+  const repairedCBLRows = [...partialMatchCBL];
+
+  groupToCBLRows.forEach((cblRows, groupKey) => {
+    // Get all insurer indices that belong to this group
+    const groupInsurerIdxs = new Set<string>();
+    cblRows.forEach((cblRow) => {
+      const targetIdxs = getTargetInsurerIdxs(cblRow, partialMatchCBL);
+      targetIdxs.forEach((idx: string) => groupInsurerIdxs.add(idx));
+    });
+
+    // Count how many insurer rows actually exist for this group
+    const remainingInsurerCount = partialMatchInsurer.filter((row) =>
+      groupInsurerIdxs.has(row.idx),
+    ).length;
+
+    // Update matched_insurer_indices for all CBL rows in this group
+    const newMatchedIndices = Array.from(
+      { length: remainingInsurerCount },
+      (_, i) => i,
+    );
+
+    cblRows.forEach((cblRow) => {
+      const index = repairedCBLRows.findIndex((r) => r.idx === cblRow.idx);
+      if (index !== -1) {
+        repairedCBLRows[index].matched_insurer_indices =
+          JSON.stringify(newMatchedIndices);
+      }
+    });
+  });
+
+  return repairedCBLRows;
+};
+
 export const getNextMatchGroup = (worksheet1: any[], worksheet2: any[]) => {
   const lastGroup1 = worksheet1[worksheet1.length - 1]?.match_group || 0;
   const lastGroup2 = worksheet2[worksheet2.length - 1]?.match_group || 0;
