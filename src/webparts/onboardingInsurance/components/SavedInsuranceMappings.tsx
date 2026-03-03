@@ -55,14 +55,19 @@ export default function SavedInsuranceMappings({
     }
 
     Object.entries(parsedSavedMapping).forEach(([savedKey, savedValue]) => {
-      const baseValue = savedValue.toString().replace(/_\d+$/, "");
+      const values = Array.isArray(savedValue) ? savedValue : [savedValue];
 
-      const cblKey = Object.keys(parsedCblMapping).find(
-        (key) => parsedCblMapping[key] === baseValue
-      );
+      const cblKeys = values
+        .map((v: any) => {
+          const baseValue = v.toString().replace(/_\d+$/, "");
+          return Object.keys(parsedCblMapping).find(
+            (key) => parsedCblMapping[key] === baseValue
+          );
+        })
+        .filter(Boolean) as string[];
 
-      if (cblKey) {
-        result[savedKey] = cblKey;
+      if (cblKeys.length > 0) {
+        result[savedKey] = cblKeys.join(", ");
       }
     });
 

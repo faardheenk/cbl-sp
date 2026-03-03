@@ -115,6 +115,11 @@ function MatchableComponent({
     string[]
   >([]);
 
+  // Selected subtotals for CBL and Insurer (for difference display)
+  const [cblSelectedSubtotal, setCblSelectedSubtotal] = useState<number>(0);
+  const [insurerSelectedSubtotal, setInsurerSelectedSubtotal] =
+    useState<number>(0);
+
   // Track which CBL rows are selected and their corresponding Insurer mappings
   const [cblSelectionMappings, setCblSelectionMappings] = useState<
     Map<string, string[]>
@@ -327,6 +332,8 @@ function MatchableComponent({
                   onSyncScrollChange={setSyncScrollEnabled}
                   onScroll={handleCblScroll}
                   externalScrollTop={insurerScrollTop}
+                  onSelectedSubtotalChange={setCblSelectedSubtotal}
+                  otherSectionSubtotal={insurerSelectedSubtotal}
                 />
               </div>
             </div>
@@ -386,6 +393,8 @@ function MatchableComponent({
                   syncScrollEnabled={syncScrollEnabled}
                   onScroll={handleInsurerScroll}
                   externalScrollTop={cblScrollTop}
+                  onSelectedSubtotalChange={setInsurerSelectedSubtotal}
+                  otherSectionSubtotal={cblSelectedSubtotal}
                 />
               </div>
             </div>

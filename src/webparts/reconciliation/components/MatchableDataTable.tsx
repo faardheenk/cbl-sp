@@ -224,6 +224,9 @@ type Props = {
   onSyncScrollChange?: (enabled: boolean) => void;
   onScroll?: (scrollTop: number) => void;
   externalScrollTop?: number;
+  // Cross-table selected subtotal (for difference display)
+  onSelectedSubtotalChange?: (subtotal: number) => void;
+  otherSectionSubtotal?: number;
 };
 
 // Resizable title component with hide button
@@ -326,6 +329,8 @@ function MatchableDataTable({
   onSyncScrollChange,
   onScroll,
   externalScrollTop,
+  onSelectedSubtotalChange,
+  otherSectionSubtotal,
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [previousDataLength, setPreviousDataLength] = useState<number>(
@@ -512,7 +517,10 @@ function MatchableDataTable({
       manuallyDeselectedRowsLocal.includes(row.idx),
     );
 
-    console.log(`[Selection Change] ${sideName} Selected Rows:`, selectedRowObjects);
+    console.log(
+      `[Selection Change] ${sideName} Selected Rows:`,
+      selectedRowObjects,
+    );
     console.log(
       `[Selection Change] ${sideName} Deselected Rows:`,
       deselectedRowObjects,
@@ -760,6 +768,11 @@ function MatchableDataTable({
     }, 0);
   }, [selectedRows, data]);
 
+  // Notify parent of selected subtotal for cross-table difference
+  useEffect(() => {
+    onSelectedSubtotalChange?.(selectedRowsSubtotal);
+  }, [selectedRowsSubtotal, onSelectedSubtotalChange]);
+
   const handleRowClicked = useCallback(
     (row: any) => {
       // Check if the row is empty (all values are empty strings)
@@ -822,7 +835,6 @@ function MatchableDataTable({
             r.ProcessedAmount !== "",
         );
         rowsToToggle = [row.idx, ...rowsWithSameGroup.map((r) => r.idx)];
-
       }
 
       // Update manual selection state (single update)
@@ -1154,7 +1166,9 @@ function MatchableDataTable({
           />
           {selectedRows.length > 0 && (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "4px" }}
+              >
                 <Tooltip title="Navigate to previous selected row">
                   <Button
                     type="default"
@@ -1220,6 +1234,39 @@ function MatchableDataTable({
                   })}
                 </span>
               </Tooltip>
+              {otherSectionSubtotal !== undefined && (
+                <Tooltip title="This section's selected subtotal minus the other section's selected subtotal">
+                  <span
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      color:
+                        selectedRowsSubtotal - otherSectionSubtotal >= 0
+                          ? "#389e0d"
+                          : "#cf1322",
+                      padding: "4px 12px",
+                      backgroundColor:
+                        selectedRowsSubtotal - otherSectionSubtotal >= 0
+                          ? "#f6ffed"
+                          : "#fff2f0",
+                      borderRadius: "4px",
+                      border:
+                        selectedRowsSubtotal - otherSectionSubtotal >= 0
+                          ? "1px solid #b7eb8f"
+                          : "1px solid #ffccc7",
+                    }}
+                  >
+                    Difference: Rs{" "}
+                    {(selectedRowsSubtotal - otherSectionSubtotal).toLocaleString(
+                      "en-US",
+                      {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      },
+                    )}
+                  </span>
+                </Tooltip>
+              )}
             </>
           )}
         </div>

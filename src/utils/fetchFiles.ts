@@ -21,7 +21,7 @@ export type FetchedFileType = {
 
 export const fetchFile = async (
   url: string,
-  sp: SPFI
+  sp: SPFI,
 ): Promise<FetchedFileType> => {
   try {
     // Validate that sp is properly initialized
@@ -63,22 +63,52 @@ export const fetchFile = async (
       noMatchesFile2Worksheet,
       {
         defval: "",
-      }
+      },
     );
 
     const { cbl: exactMatchCBL, insurer: exactMatchInsurer } = splitData(
       exactMatches,
-      "exact"
+      "exact",
     );
 
     const { cbl: partialMatchCBL, insurer: partialMatchInsurer } = splitData(
       partialMatches,
-      "partial"
+      "partial",
     );
 
     const noMatchCBL = filterData("", noMatchCBLJson);
 
     const noMatchInsurer = filterData("_INSURER", noMatchInsurerJson);
+
+    // Columns to exclude from display (internal/metadata columns)
+    const columnsToExclude = [
+      "matched_insurer_indices",
+      "Placing No.",
+      "PlacingNo_Clean",
+      "Amount_Clean",
+      "match_status",
+      "match_pass",
+      "matched_amtdue_total",
+      "partial_candidates_indices",
+      "match_resolved_in_pass",
+      "partial_resolved_in_pass",
+      "string matching_INSURER",
+      "PlacingNo_Clean_INSURER",
+      "PolicyNo_1_Clean_INSURER",
+      "PolicyNo_2_Clean_INSURER",
+      "Amount_Clean_INSURER",
+      "string matching",
+      "PolicyNo_1_Clean",
+      "PolicyNo_2_Clean",
+      "PolicyNo_Clean",
+      "MatrixKey",
+      "ProcessedAmount_Clean",
+      "ClientName_Clean",
+      "match_reason",
+      "group_id",
+      "corporate_root",
+      "match_confidence",
+    ];
 
     const cblColumns =
       noMatchCBL && noMatchCBL.length > 0
@@ -89,10 +119,16 @@ export const fetchFile = async (
         ? Object.keys(noMatchInsurer[0] as Record<string, any>)
         : [];
 
-    const cblTableColumns = convertToTableColumns(cblColumns.slice(1, -16));
-    const insurerTableColumns = convertToTableColumns(
-      insurerColumns.slice(1, -5)
+    // Filter out excluded columns and idx
+    const filteredCblColumns = cblColumns.filter(
+      (key) => !columnsToExclude.includes(key) && key !== "idx",
     );
+    const filteredInsurerColumns = insurerColumns.filter(
+      (key) => !columnsToExclude.includes(key) && key !== "idx",
+    );
+
+    const cblTableColumns = convertToTableColumns(filteredCblColumns);
+    const insurerTableColumns = convertToTableColumns(filteredInsurerColumns);
 
     return {
       exactMatchCBL,
@@ -112,14 +148,14 @@ export const fetchFile = async (
     // Provide more specific error messages
     if (!sp) {
       throw new Error(
-        "SharePoint context is not initialized. Make sure the component is wrapped in SpContext.Provider."
+        "SharePoint context is not initialized. Make sure the component is wrapped in SpContext.Provider.",
       );
     }
 
     if (error instanceof Error) {
       if (error.message.includes("Cannot read properties of undefined")) {
         throw new Error(
-          "SharePoint context is undefined. The component may not be properly initialized within the SharePoint framework."
+          "SharePoint context is undefined. The component may not be properly initialized within the SharePoint framework.",
         );
       }
       throw error;

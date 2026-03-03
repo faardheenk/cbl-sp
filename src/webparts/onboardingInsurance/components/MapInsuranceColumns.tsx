@@ -74,7 +74,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
           cell !== null &&
           cell !== undefined &&
           typeof cell === "string" &&
-          cell.trim().length > 0
+          cell.trim().length > 0,
       ).length;
 
       if (textCount > maxTextCount) {
@@ -89,7 +89,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
   // Helper function to extract columns from detected header row
   const extractColumns = (
     sheetData: any[][],
-    headerRowIndex: number
+    headerRowIndex: number,
   ): string[] => {
     if (sheetData.length === 0 || !sheetData[headerRowIndex]) return [];
 
@@ -154,7 +154,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
           clearInterval(progressInterval);
           onError?.(error);
           message.error(
-            "Error processing file. Please check if it's a valid Excel file."
+            "Error processing file. Please check if it's a valid Excel file.",
           );
         }
       };
@@ -231,7 +231,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
           clearInterval(progressInterval);
           onError?.(error);
           message.error(
-            "Error processing file. Please check if it's a valid Excel file."
+            "Error processing file. Please check if it's a valid Excel file.",
           );
         }
       };
@@ -258,7 +258,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
     const existing = mappings.find(
       (m) =>
         m.file1Column === selectedFile1Column &&
-        m.file2Column === selectedFile2Column
+        m.file2Column === selectedFile2Column,
     );
 
     if (!existing) {
@@ -277,7 +277,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
   // Remove a specific mapping
   const removeMapping = (file1Col: string, file2Col: string) => {
     const updated = mappings.filter(
-      (m) => !(m.file1Column === file1Col && m.file2Column === file2Col)
+      (m) => !(m.file1Column === file1Col && m.file2Column === file2Col),
     );
     setMappings(updated);
   };
@@ -328,7 +328,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
       // Check if a folder with this insurance name already exists
       const existingItems = allItems.filter(
         (item) =>
-          item.Title === insuranceNameUpper && item.FileSystemObjectType === 1
+          item.Title === insuranceNameUpper && item.FileSystemObjectType === 1,
       );
 
       console.log("Filtered existing items:", existingItems);
@@ -414,7 +414,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
           >
             <ToastTitle>Mappings saved successfully</ToastTitle>
           </Toast>,
-          { position: "top", intent: "success", timeout: 1000 }
+          { position: "top", intent: "success", timeout: 1000 },
         );
       })
       .catch((error) => {
@@ -428,7 +428,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
           >
             <ToastTitle>Error saving mappings</ToastTitle>
           </Toast>,
-          { position: "top", intent: "error", timeout: 1000 }
+          { position: "top", intent: "error", timeout: 1000 },
         );
       })
       .finally(() => {
@@ -460,7 +460,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
     console.log(items);
 
     const { Title: InsuranceName, ColumnMappings } = items.find(
-      (item) => item.Title === "CBL"
+      (item) => item.Title === "CBL",
     );
 
     if (InsuranceName && ColumnMappings) {
@@ -603,20 +603,28 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
             </div>
 
             <div className={styles["mapping-list"]}>
-              {/* Group mappings by File 2 column to show many-to-one relationships */}
+              {/* Group by File 2 so that:
+                  - 1 File 1 → 2 File 2: two rows (same File 1 column, different File 2 columns)
+                  - 2 File 1 → 1 File 2: one row (multiple File 1 columns as tags → one File 2 column) */}
               {Object.entries(
-                mappings.reduce((acc, map) => {
-                  if (!acc[map.file2Column]) {
-                    acc[map.file2Column] = [];
-                  }
-                  acc[map.file2Column].push(map.file1Column);
-                  return acc;
-                }, {} as Record<string, string[]>)
+                mappings.reduce(
+                  (acc, map) => {
+                    if (!acc[map.file2Column]) {
+                      acc[map.file2Column] = [];
+                    }
+                    acc[map.file2Column].push(map.file1Column);
+                    return acc;
+                  },
+                  {} as Record<string, string[]>,
+                ),
               ).map(([file2Col, file1Cols]) => (
-                <div key={file2Col} className={styles["mapping-item"]}>
+                <div
+                  key={`${file2Col}-${file1Cols.join(",")}`}
+                  className={styles["mapping-item"]}
+                >
                   <div className={styles["tags"]}>
                     {file1Cols.map((file1Col) => (
-                      <span key={file1Col} className={styles["tag"]}>
+                      <span key={`${file1Col}-${file2Col}`} className={styles["tag"]}>
                         {file1Col}
                         <button
                           className={styles["remove-btn"]}
