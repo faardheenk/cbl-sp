@@ -81,7 +81,7 @@ export const mergeData = (cbl: any[], insurer: any[]): any[] => {
               ? insurerRow[key].trim()
               : insurerRow[key];
           insurerWithPostfix[`${key}_INSURER`] =
-            value === "" ? 0 : insurerRow[key];
+            value === "" ? null : insurerRow[key];
         } else {
           insurerWithPostfix[key] = insurerRow[key];
         }
@@ -93,7 +93,7 @@ export const mergeData = (cbl: any[], insurer: any[]): any[] => {
     for (const key in cblRow) {
       const value =
         typeof cblRow[key] === "string" ? cblRow[key].trim() : cblRow[key];
-      processedCblRow[key] = value === "" ? 0 : cblRow[key];
+      processedCblRow[key] = value === "" ? null : cblRow[key];
     }
 
     return { ...processedCblRow, ...insurerWithPostfix };

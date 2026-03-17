@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { ColumnsType } from "antd/es/table";
+import { MatchHistoryEntry } from "../utils/matchHistory";
 
 // Action history item type for undo functionality
 export interface ActionHistoryItem {
@@ -99,6 +100,11 @@ interface ReconciliationContextType {
   addToHistory: (item: Omit<ActionHistoryItem, "id" | "timestamp">) => void;
   removeFromHistory: (ids: string[]) => void;
   clearHistory: () => void;
+
+  // Match history for cross-session persistence
+  matchHistoryEntries: MatchHistoryEntry[];
+  setMatchHistoryEntries: React.Dispatch<React.SetStateAction<MatchHistoryEntry[]>>;
+  addMatchHistoryEntry: (entry: MatchHistoryEntry) => void;
 }
 
 const ReconciliationContext = createContext<
@@ -175,6 +181,13 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
 
   const clearHistory = () => {
     setActionHistory([]);
+  };
+
+  // Match history for cross-session persistence
+  const [matchHistoryEntries, setMatchHistoryEntries] = useState<MatchHistoryEntry[]>([]);
+
+  const addMatchHistoryEntry = (entry: MatchHistoryEntry) => {
+    setMatchHistoryEntries((prev) => [...prev, entry]);
   };
 
   return (
@@ -262,6 +275,11 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
         addToHistory,
         removeFromHistory,
         clearHistory,
+
+        // Match history for cross-session persistence
+        matchHistoryEntries,
+        setMatchHistoryEntries,
+        addMatchHistoryEntry,
       }}
     >
       {children}

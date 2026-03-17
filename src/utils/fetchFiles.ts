@@ -86,6 +86,8 @@ export const fetchFile = async (
       "Placing No.",
       "PlacingNo_Clean",
       "Amount_Clean",
+      "_fingerprint",
+      "_fingerprint_INSURER",
       "match_status",
       "match_pass",
       "matched_amtdue_total",
@@ -108,6 +110,7 @@ export const fetchFile = async (
       "group_id",
       "corporate_root",
       "match_confidence",
+      "amount_difference",
     ];
 
     const cblColumns =

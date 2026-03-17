@@ -17,8 +17,8 @@ import {
   Tooltip,
 } from "@fluentui/react-components";
 import { addPostfix, mergeData } from "../../../utils/filterData";
-import { IListItemFormUpdateValue } from "@pnp/sp/lists";
 import UndoModal from "./UndoModal";
+import { saveMatchHistory } from "../../../utils/matchHistory";
 
 type SaveChangesProps = {
   onUndo?: (actionIds: string[]) => void;
@@ -42,8 +42,9 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
     partialMatchSum2,
     noMatchSum1,
     noMatchSum2,
-    matrix,
     actionHistory,
+    matchHistoryEntries,
+    setMatchHistoryEntries,
   } = useReconciliation();
 
   const toasterId = useId("toaster");
@@ -52,38 +53,6 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
   const urlParams = new URLSearchParams(window.location.search);
   const insuranceName = urlParams.get("Insurance");
   const date = urlParams.get("Date");
-
-  const addMatrixKeys = async () => {
-    if (!matrix || matrix.length === 0) {
-      return;
-    }
-
-    try {
-      const list = await sp.web.lists.getByTitle("Matrix");
-
-      // Create folder path for the insurance if it doesn't exist
-      const folderServerRelativePath = `${context.pageContext.web.serverRelativeUrl}/Lists/Matrix/${insuranceName}`;
-
-      // Add each matrix key as a separate item
-      for (const matrixKey of matrix) {
-        const formValues: IListItemFormUpdateValue[] = [
-          { FieldName: "Title", FieldValue: matrixKey },
-          // { FieldName: "Insurance", FieldValue: insuranceName },
-          // { FieldName: "Date", FieldValue: date },
-        ];
-
-        await list.addValidateUpdateItemUsingPath(
-          formValues,
-          folderServerRelativePath
-        );
-      }
-
-      console.log("Matrix keys added successfully");
-    } catch (error) {
-      console.error("Error adding matrix keys:", error);
-      throw error;
-    }
-  };
 
   const handleUndoClick = () => {
     setIsUndoModalOpen(true);
@@ -172,8 +141,15 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
               );
 
               if (res.status === 200) {
-                // Save matrix keys to SharePoint
-                await addMatrixKeys();
+                // Save match history for cross-session persistence
+                console.log("[Match History] Entries to save:", matchHistoryEntries.length, matchHistoryEntries);
+                await saveMatchHistory(
+                  sp,
+                  matchHistoryEntries,
+                  (insuranceName || "").toUpperCase().trim(),
+                  context.pageContext.web.serverRelativeUrl,
+                );
+                setMatchHistoryEntries([]);
 
                 dispatchToast(
                   <Toast className="bg-success text-white rounded-3">

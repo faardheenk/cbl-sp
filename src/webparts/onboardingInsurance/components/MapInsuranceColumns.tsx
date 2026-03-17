@@ -314,43 +314,20 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
   };
 
   const createMatrixInsurerFolder = async () => {
-    try {
-      const insuranceNameUpper = insuranceName.toUpperCase().trim();
-      console.log("Looking for existing folder with name:", insuranceNameUpper);
+    const url = `${
+      context.pageContext.web.serverRelativeUrl
+    }/Matrix/${insuranceName.toUpperCase().trim()}`;
 
-      // First, let's get all items to see what's actually in the list
-      const allItems = await sp.web.lists
-        .getByTitle("Matrix")
-        .items.select("Id,Title,FileSystemObjectType,ContentTypeId")();
+    const existingFolder = await sp.web
+      .getFolderByServerRelativePath(url)
+      .select(`Exists`)();
 
-      console.log("All items in Matrix list:", allItems);
-
-      // Check if a folder with this insurance name already exists
-      const existingItems = allItems.filter(
-        (item) =>
-          item.Title === insuranceNameUpper && item.FileSystemObjectType === 1,
-      );
-
-      console.log("Filtered existing items:", existingItems);
-
-      if (existingItems.length === 0) {
-        console.log("No existing folder found, creating new one...");
-        // Create a new folder in the Matrix list
-        const newFolder = await sp.web.lists.getByTitle("Matrix").items.add({
-          Title: insuranceNameUpper,
-          ContentTypeId: "0x0120", // Folder content type
-        });
-
-        console.log("Created new folder:", newFolder);
-        return newFolder;
-      }
-
-      console.log("Found existing folder:", existingItems[0]);
-      return existingItems[0]; // Return existing folder
-    } catch (error) {
-      console.error("Error creating Matrix list folder:", error);
-      throw error;
+    if (!existingFolder.Exists) {
+      const folder = await sp.web.folders.addUsingPath(url);
+      return folder;
     }
+
+    return;
   };
 
   const saveMappings = async () => {

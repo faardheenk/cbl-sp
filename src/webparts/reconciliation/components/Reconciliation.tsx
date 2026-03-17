@@ -27,6 +27,11 @@ import {
 } from "../../../utils/utils";
 import { generateMatrixKeys } from "../../../utils/generateMatrixKeys";
 import { regenerateIdx } from "../../../utils/filterData";
+import {
+  getCanonicalCblFingerprint,
+  getCanonicalInsurerFingerprint,
+  MatchHistoryEntry,
+} from "../../../utils/matchHistory";
 
 function Reconciliation() {
   const { context, sp } = useSpContext();
@@ -65,6 +70,7 @@ function Reconciliation() {
     addToHistory,
     actionHistory,
     removeFromHistory,
+    addMatchHistoryEntry,
   } = useReconciliation();
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -879,6 +885,29 @@ function Reconciliation() {
         insurerRowIndices,
         matrixKey,
       });
+
+      // Record match history for cross-session persistence
+      const nonBlankCBL = rowsToMoveCBL.filter(
+        (row) => row.ProcessedAmount !== undefined && row.ProcessedAmount !== "",
+      );
+      const nonBlankInsurer = rowsToMoveInsurer.filter(
+        (row) => row.ProcessedAmount !== undefined && row.ProcessedAmount !== "",
+      );
+
+      if (nonBlankCBL.length > 0 || nonBlankInsurer.length > 0) {
+        const historyEntry: MatchHistoryEntry = {
+          cblFingerprints: nonBlankCBL
+            .map((row) => getCanonicalCblFingerprint(row))
+            .filter(Boolean),
+          insurerFingerprints: nonBlankInsurer
+            .map((row) => getCanonicalInsurerFingerprint(row))
+            .filter(Boolean),
+          targetBucket: toSection,
+          fromBucket: fromSection,
+          timestamp: new Date().toISOString(),
+        };
+        addMatchHistoryEntry(historyEntry);
+      }
 
       // Handle special case: partial to exact (uses manualMatching)
       if (fromSection === "partial" && toSection === "exact") {
