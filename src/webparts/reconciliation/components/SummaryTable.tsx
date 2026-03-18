@@ -1,7 +1,11 @@
 import React from "react";
 import styles from "./Reconciliation.module.scss";
 import { MoneyRegular, DocumentRegular } from "@fluentui/react-icons";
-import { countNonBlankRows, formatAmount } from "../../../utils/utils";
+import {
+  calculateSum,
+  countNonBlankRows,
+  formatAmount,
+} from "../../../utils/utils";
 import { useReconciliation } from "../../../context/ReconciliationContext";
 
 type SummaryTableProps = {
@@ -21,7 +25,25 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
     partialMatchInsurer,
     noMatchCBL,
     noMatchInsurer,
+    dynamicBuckets,
+    dynamicBucketData,
   } = useReconciliation();
+
+  const dynamicBucketSummaries = dynamicBuckets.map((bucket) => {
+    const bucketRows = dynamicBucketData[bucket.BucketKey] || {
+      cbl: [],
+      insurer: [],
+    };
+    const sums = calculateSum(bucketRows.cbl, bucketRows.insurer);
+
+    return {
+      ...bucket,
+      sum1: sums.sum1,
+      sum2: sums.sum2,
+      count1: countNonBlankRows(bucketRows.cbl),
+      count2: countNonBlankRows(bucketRows.insurer),
+    };
+  });
   return (
     <>
       <div className={styles.summaryTable}>
@@ -107,6 +129,33 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
                     </span>
                   </div>
                 </div>
+                {dynamicBucketSummaries.map((bucket) => (
+                  <div
+                    key={`cbl-${bucket.BucketKey}`}
+                    className={styles.summaryTableCell}
+                    data-match-type="partial"
+                  >
+                    <span className={styles.summaryTableLabel}>
+                      <MoneyRegular />
+                      {bucket.BucketName}
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span className={styles.summaryTableValue}>
+                        Rs {formatAmount(bucket.sum1)}
+                      </span>
+                      <span className={styles.summaryTableSubValue}>
+                        <DocumentRegular />
+                        {bucket.count1} lines
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
             <div className={styles.summaryTableSection}>
@@ -186,6 +235,33 @@ function SummaryTable({ insuranceName }: SummaryTableProps) {
                     </span>
                   </div>
                 </div>
+                {dynamicBucketSummaries.map((bucket) => (
+                  <div
+                    key={`insurer-${bucket.BucketKey}`}
+                    className={styles.summaryTableCell}
+                    data-match-type="partial"
+                  >
+                    <span className={styles.summaryTableLabel}>
+                      <MoneyRegular />
+                      {bucket.BucketName}
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <span className={styles.summaryTableValue}>
+                        Rs {formatAmount(bucket.sum2)}
+                      </span>
+                      <span className={styles.summaryTableSubValue}>
+                        <DocumentRegular />
+                        {bucket.count2} lines
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

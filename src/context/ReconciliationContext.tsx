@@ -1,14 +1,19 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { ColumnsType } from "antd/es/table";
 import { MatchHistoryEntry } from "../utils/matchHistory";
+import {
+  BucketKey,
+  BucketRows,
+  DynamicBucketDefinition,
+} from "../utils/reconciliationBuckets";
 
 // Action history item type for undo functionality
 export interface ActionHistoryItem {
   id: string;
   timestamp: Date;
-  actionType: "moveToPartial" | "moveToExact" | "unmatch";
-  fromSection: "exact" | "partial" | "no-match";
-  toSection: "exact" | "partial" | "no-match";
+  actionType: "moveToPartial" | "moveToExact" | "unmatch" | "moveToBucket";
+  fromSection: BucketKey;
+  toSection: BucketKey;
   cblRows: any[];
   insurerRows: any[];
   // Original indices in the source array (for restoring at exact position)
@@ -41,6 +46,16 @@ interface ReconciliationContextType {
   setNoMatchCBL: React.Dispatch<React.SetStateAction<any[]>>;
   noMatchInsurer: any[];
   setNoMatchInsurer: React.Dispatch<React.SetStateAction<any[]>>;
+
+  // Dynamic bucket states
+  dynamicBuckets: DynamicBucketDefinition[];
+  setDynamicBuckets: React.Dispatch<
+    React.SetStateAction<DynamicBucketDefinition[]>
+  >;
+  dynamicBucketData: Record<string, BucketRows>;
+  setDynamicBucketData: React.Dispatch<
+    React.SetStateAction<Record<string, BucketRows>>
+  >;
 
   // Sum states
   partialMatchSum1: number;
@@ -129,6 +144,12 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
   // No match states
   const [noMatchCBL, setNoMatchCBL] = useState<any[]>([]);
   const [noMatchInsurer, setNoMatchInsurer] = useState<any[]>([]);
+  const [dynamicBuckets, setDynamicBuckets] = useState<DynamicBucketDefinition[]>(
+    [],
+  );
+  const [dynamicBucketData, setDynamicBucketData] = useState<
+    Record<string, BucketRows>
+  >({});
 
   // Matrix
   const [matrix, setMatrix] = useState<any[]>([]);
@@ -216,6 +237,10 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
         setNoMatchCBL,
         noMatchInsurer,
         setNoMatchInsurer,
+        dynamicBuckets,
+        setDynamicBuckets,
+        dynamicBucketData,
+        setDynamicBucketData,
 
         // Sum states
         partialMatchSum1,

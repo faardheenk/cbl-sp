@@ -1,13 +1,46 @@
 import { SPFI } from "@pnp/sp";
 import * as XLSX from "xlsx";
+import { BucketKey } from "./reconciliationBuckets";
 
 export interface MatchHistoryEntry {
   cblFingerprints: string[];
   insurerFingerprints: string[];
-  targetBucket: "exact" | "partial" | "no-match";
-  fromBucket: "exact" | "partial" | "no-match";
+  targetBucket: BucketKey;
+  fromBucket: BucketKey;
   timestamp: string;
 }
+
+const serializeMatchHistoryEntries = (entries: MatchHistoryEntry[]) =>
+  entries.map((entry) => ({
+    CblFingerprints: JSON.stringify(entry.cblFingerprints),
+    InsurerFingerprints: JSON.stringify(entry.insurerFingerprints),
+    FromBucket: entry.fromBucket,
+    TargetBucket: entry.targetBucket,
+    Timestamp: entry.timestamp,
+  }));
+
+const createMatchHistoryWorkbook = (entries: MatchHistoryEntry[]) => {
+  const workbook = XLSX.utils.book_new();
+  const sheetData = serializeMatchHistoryEntries(entries);
+  const worksheet = XLSX.utils.json_to_sheet(sheetData);
+
+  if (sheetData.length === 0) {
+    XLSX.utils.sheet_add_aoa(
+      worksheet,
+      [[
+        "CblFingerprints",
+        "InsurerFingerprints",
+        "FromBucket",
+        "TargetBucket",
+        "Timestamp",
+      ]],
+      { origin: "A1" },
+    );
+  }
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, "MatchHistory");
+  return workbook;
+};
 
 const FINGERPRINT_EXCLUDE_COLUMNS = new Set([
   // Backend preprocessing columns
@@ -145,19 +178,7 @@ export const saveMatchHistory = async (
   }
 
   const allEntries = [...existingEntries, ...entries];
-
-  // Convert to sheet-friendly rows
-  const sheetData = allEntries.map((entry) => ({
-    CblFingerprints: JSON.stringify(entry.cblFingerprints),
-    InsurerFingerprints: JSON.stringify(entry.insurerFingerprints),
-    FromBucket: entry.fromBucket,
-    TargetBucket: entry.targetBucket,
-    Timestamp: entry.timestamp,
-  }));
-
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(sheetData);
-  XLSX.utils.book_append_sheet(workbook, worksheet, "MatchHistory");
+  const workbook = createMatchHistoryWorkbook(allEntries);
 
   const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
   const blob = new Blob([wbout], {
@@ -183,6 +204,35 @@ export const saveMatchHistory = async (
   console.log(
     `[Match History] Saved ${entries.length} new entries (${allEntries.length} total) to ${filePath}`,
   );
+};
+
+export const overwriteMatchHistory = async (
+  sp: SPFI,
+  entries: MatchHistoryEntry[],
+  insurerName: string,
+  serverRelativeUrl: string,
+): Promise<void> => {
+  const folderPath = `${serverRelativeUrl}/Matrix/${insurerName}`;
+  const workbook = createMatchHistoryWorkbook(entries);
+  const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([wbout], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  try {
+    const existingFolder = await sp.web
+      .getFolderByServerRelativePath(folderPath)
+      .select("Exists")();
+    if (!existingFolder.Exists) {
+      await sp.web.folders.addUsingPath(folderPath);
+    }
+  } catch {
+    await sp.web.folders.addUsingPath(folderPath);
+  }
+
+  await sp.web
+    .getFolderByServerRelativePath(folderPath)
+    .files.addUsingPath("history.xlsx", blob, { Overwrite: true });
 };
 
 /**
@@ -212,8 +262,8 @@ export const readMatchHistory = async (
     return rows.map((row: any) => ({
       cblFingerprints: JSON.parse(row.CblFingerprints || "[]"),
       insurerFingerprints: JSON.parse(row.InsurerFingerprints || "[]"),
-      fromBucket: row.FromBucket as "exact" | "partial" | "no-match",
-      targetBucket: row.TargetBucket as "exact" | "partial" | "no-match",
+      fromBucket: row.FromBucket as BucketKey,
+      targetBucket: row.TargetBucket as BucketKey,
       timestamp: row.Timestamp,
     }));
   } catch (error) {

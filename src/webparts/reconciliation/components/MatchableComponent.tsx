@@ -1,16 +1,27 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MoneyRegular, DocumentRegular } from "@fluentui/react-icons";
+import type { MenuProps } from "antd";
 import styles from "./Reconciliation.module.scss";
-import { countNonBlankRows, formatAmount } from "../../../utils/utils";
+import {
+  calculateSum,
+  countNonBlankRows,
+  formatAmount,
+} from "../../../utils/utils";
 import MatchableDataTable from "./MatchableDataTable";
 import { useReconciliation } from "../../../context/ReconciliationContext";
+import { BucketKey } from "../../../utils/reconciliationBuckets";
 
 type MatchableComponentProps = {
   insuranceName: string;
   title?: string;
-  type: "exact" | "partial" | "no-match";
+  type: BucketKey;
   clearSelections?: boolean;
   loading?: boolean;
+  dataFile1Override?: any[];
+  dataFile2Override?: any[];
+  setMatchesFile1Override?: React.Dispatch<React.SetStateAction<any[]>>;
+  setMatchesFile2Override?: React.Dispatch<React.SetStateAction<any[]>>;
+  actionMenuItems?: MenuProps["items"];
   // Action handlers
   onUnmatch?: () => void;
   onMoveToExactMatch?: () => void;
@@ -23,6 +34,11 @@ function MatchableComponent({
   type,
   clearSelections = false,
   loading = false,
+  dataFile1Override,
+  dataFile2Override,
+  setMatchesFile1Override,
+  setMatchesFile2Override,
+  actionMenuItems,
   onUnmatch,
   onMoveToExactMatch,
   onMoveToPartialMatch,
@@ -61,29 +77,39 @@ function MatchableComponent({
 
   // Determine which data to use based on type
   const dataFile1 =
-    type === "exact"
-      ? exactMatchCBL
-      : type === "partial"
-        ? partialMatchCBL
-        : noMatchCBL;
+    dataFile1Override !== undefined
+      ? dataFile1Override
+      : type === "exact"
+        ? exactMatchCBL
+        : type === "partial"
+          ? partialMatchCBL
+          : noMatchCBL;
   const dataFile2 =
-    type === "exact"
-      ? exactMatchInsurer
-      : type === "partial"
-        ? partialMatchInsurer
-        : noMatchInsurer;
+    dataFile2Override !== undefined
+      ? dataFile2Override
+      : type === "exact"
+        ? exactMatchInsurer
+        : type === "partial"
+          ? partialMatchInsurer
+          : noMatchInsurer;
+
+  const calculatedSums = calculateSum(dataFile1, dataFile2);
   const sum1 =
-    type === "exact"
-      ? exactMatchSum1
-      : type === "partial"
-        ? partialMatchSum1
-        : noMatchSum1;
+    dataFile1Override !== undefined || dataFile2Override !== undefined
+      ? calculatedSums.sum1
+      : type === "exact"
+        ? exactMatchSum1
+        : type === "partial"
+          ? partialMatchSum1
+          : noMatchSum1;
   const sum2 =
-    type === "exact"
-      ? exactMatchSum2
-      : type === "partial"
-        ? partialMatchSum2
-        : noMatchSum2;
+    dataFile1Override !== undefined || dataFile2Override !== undefined
+      ? calculatedSums.sum2
+      : type === "exact"
+        ? exactMatchSum2
+        : type === "partial"
+          ? partialMatchSum2
+          : noMatchSum2;
 
   const setSum1 =
     type === "exact"
@@ -98,17 +124,19 @@ function MatchableComponent({
         ? setPartialMatchSum2
         : setNoMatchSum2;
   const setMatchesFile1 =
-    type === "exact"
+    setMatchesFile1Override ||
+    (type === "exact"
       ? setExactMatchCBL
       : type === "partial"
         ? setPartialMatchCBL
-        : setNoMatchCBL;
+        : setNoMatchCBL);
   const setMatchesFile2 =
-    type === "exact"
+    setMatchesFile2Override ||
+    (type === "exact"
       ? setExactMatchInsurer
       : type === "partial"
         ? setPartialMatchInsurer
-        : setNoMatchInsurer;
+        : setNoMatchInsurer);
 
   // State to manage cross-table row selection
   const [autoSelectedInsurerRows, setAutoSelectedInsurerRows] = useState<
@@ -328,6 +356,7 @@ function MatchableComponent({
                   onUnmatch={onUnmatch}
                   onMoveToExactMatch={onMoveToExactMatch}
                   onMoveToPartialMatch={onMoveToPartialMatch}
+                  actionMenuItems={actionMenuItems}
                   syncScrollEnabled={syncScrollEnabled}
                   onSyncScrollChange={setSyncScrollEnabled}
                   onScroll={handleCblScroll}
@@ -390,6 +419,7 @@ function MatchableComponent({
                   onUnmatch={onUnmatch}
                   onMoveToExactMatch={onMoveToExactMatch}
                   onMoveToPartialMatch={onMoveToPartialMatch}
+                  actionMenuItems={actionMenuItems}
                   syncScrollEnabled={syncScrollEnabled}
                   onScroll={handleInsurerScroll}
                   externalScrollTop={cblScrollTop}

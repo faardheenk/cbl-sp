@@ -1,7 +1,7 @@
 import { SPFI } from "@pnp/sp";
 import * as XLSX from "xlsx";
-import { IFileUploadProgressData } from "@pnp/sp/files";
 import { exportReport } from "./exportReport";
+import { DynamicBucketDefinition } from "./reconciliationBuckets";
 
 export const saveExcel = async (
   sp: SPFI,
@@ -16,7 +16,9 @@ export const saveExcel = async (
   noMatchSum1: number,
   noMatchSum2: number,
   insuranceName: string,
-  folderPath: string
+  folderPath: string,
+  dynamicBuckets: DynamicBucketDefinition[] = [],
+  dynamicBucketSheets: Record<string, any[]> = {},
 ) => {
   console.log("--- SAVING EXCEL ---");
   const workbook = exportReport(
@@ -30,7 +32,9 @@ export const saveExcel = async (
     mergedPartialMatch,
     noMatchCBL,
     noMatchInsurer,
-    insuranceName
+    insuranceName,
+    dynamicBuckets,
+    dynamicBucketSheets,
   );
 
   console.log("--- CREATING BLOB ---");

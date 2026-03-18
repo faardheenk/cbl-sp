@@ -1,8 +1,14 @@
-export const filterData = (postfix: string, data: any[]): any[] => {
+import { BucketKey, buildBucketRowId } from "./reconciliationBuckets";
+
+export const filterData = (
+  postfix: string,
+  data: any[],
+  bucketKey: BucketKey = "no-match",
+): any[] => {
   return data.map((row, index) => {
     const filtered: Record<string, any> = {};
 
-    filtered["idx"] = "NM-" + index;
+    filtered["idx"] = buildBucketRowId(bucketKey, index);
 
     for (const key in row) {
       if (key.endsWith(postfix)) {
@@ -17,19 +23,19 @@ export const filterData = (postfix: string, data: any[]): any[] => {
 
 export const regenerateIdx = (
   data: any[],
-  type: "exact" | "partial" | "no-match" = "no-match",
+  type: BucketKey = "no-match",
 ): any[] => {
   return data.map((row, index) => {
-    const prefix =
-      type === "exact" ? "EM-" : type === "partial" ? "PM-" : "NM-";
-    row["idx"] = prefix + index;
-    return row;
+    return {
+      ...row,
+      idx: buildBucketRowId(type, index),
+    };
   });
 };
 
 export const splitData = (
   data: any[],
-  group: string,
+  group: BucketKey,
 ): { cbl: any[]; insurer: any[] } => {
   const cbl: any[] = [];
   const insurer: any[] = [];
@@ -43,11 +49,11 @@ export const splitData = (
         // Remove the _insurer postfix for the insurer object
         const cleanKey = key.replace("_INSURER", "");
         insurerRow[cleanKey] = row[key];
-        insurerRow["idx"] = group === "exact" ? "EM-" + index : "PM-" + index;
+        insurerRow["idx"] = buildBucketRowId(group, index);
       } else {
         // Keep original key for CBL object
         cblRow[key] = row[key];
-        cblRow["idx"] = group === "exact" ? "EM-" + index : "PM-" + index;
+        cblRow["idx"] = buildBucketRowId(group, index);
       }
     }
 
@@ -60,15 +66,7 @@ export const splitData = (
 
 export const mergeData = (cbl: any[], insurer: any[]): any[] => {
   return cbl.map((cblRow, index) => {
-    const insurerRow = insurer.find(
-      (insurerRow) =>
-        insurerRow.idx ===
-        (cblRow.idx.startsWith("EM-")
-          ? "EM-" + index
-          : cblRow.idx.startsWith("PM-")
-            ? "PM-" + index
-            : "NM-" + index),
-    );
+    const insurerRow = insurer[index];
 
     // Add insurance name as postfix to insurer properties
     const insurerWithPostfix: Record<string, any> = {};
@@ -103,13 +101,11 @@ export const mergeData = (cbl: any[], insurer: any[]): any[] => {
 export const addPostfix = (data: any[]): any[] => {
   return data.map((row, index) => {
     const filtered: Record<string, any> = {};
-    row["idx"] = "NM-" + index;
+    filtered["idx"] = buildBucketRowId("no-match", index);
 
     for (const key in row) {
       if (key !== "idx") {
         filtered[`${key}_INSURER`] = row[key];
-      } else {
-        filtered[key] = row[key];
       }
     }
     return filtered;

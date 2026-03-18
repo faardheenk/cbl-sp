@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { DynamicBucketDefinition } from "./reconciliationBuckets";
 
 export const exportReport = (
   exactMatchSumCBL: number,
@@ -11,8 +12,31 @@ export const exportReport = (
   partialMatches: any[],
   noMatchesCBL: any[],
   noMatchesInsurer: any[],
-  insuranceName: string = ""
+  insuranceName: string = "",
+  dynamicBuckets: DynamicBucketDefinition[] = [],
+  dynamicBucketSheets: Record<string, any[]> = {},
 ) => {
+  const dynamicSummaryRows = dynamicBuckets.map((bucket) => {
+    const bucketRows = dynamicBucketSheets[bucket.BucketKey] || [];
+    const cblSum = bucketRows.reduce(
+      (sum, row) => sum + (Number(row.ProcessedAmount) || 0),
+      0,
+    );
+    const insurerSum = bucketRows.reduce(
+      (sum, row) => sum + (Number(row.ProcessedAmount_INSURER) || 0),
+      0,
+    );
+
+    return {
+      Details: bucket.BucketName,
+      "No of tran CBL": bucketRows.length,
+      CBL: cblSum,
+      [`No of tran ${insuranceName}`]: bucketRows.length,
+      [insuranceName]: insurerSum,
+      Diff: cblSum - insurerSum,
+    };
+  });
+
   // Create a new workbook
   const workbook = XLSX.utils.book_new();
 
@@ -42,20 +66,38 @@ export const exportReport = (
       [insuranceName]: noMatchSumInsurer,
       Diff: noMatchSumCBL - noMatchSumInsurer,
     },
+    ...dynamicSummaryRows,
     {
       Details: "Total",
       "No of tran CBL":
-        exactMatches.length + partialMatches.length + noMatchesCBL.length,
-      CBL: exactMatchSumCBL + partialMatchSumCBL + noMatchSumCBL,
-      [`No of tran ${insuranceName}`]:
-        exactMatches.length + partialMatches.length + noMatchesInsurer.length,
-      [insuranceName]:
-        exactMatchSumInsurer + partialMatchSumInsurer + noMatchSumInsurer,
-      Diff:
+        exactMatches.length +
+        partialMatches.length +
+        noMatchesCBL.length +
+        dynamicSummaryRows.reduce((sum, row) => sum + row["No of tran CBL"], 0),
+      CBL:
         exactMatchSumCBL +
         partialMatchSumCBL +
-        noMatchSumCBL -
-        (exactMatchSumInsurer + partialMatchSumInsurer + noMatchSumInsurer),
+        noMatchSumCBL +
+        dynamicSummaryRows.reduce((sum, row) => sum + row.CBL, 0),
+      [`No of tran ${insuranceName}`]:
+        exactMatches.length +
+        partialMatches.length +
+        noMatchesInsurer.length +
+        dynamicSummaryRows.reduce(
+          (sum, row) => sum + row[`No of tran ${insuranceName}`],
+          0,
+        ),
+      [insuranceName]:
+        exactMatchSumInsurer +
+        partialMatchSumInsurer +
+        noMatchSumInsurer +
+        dynamicSummaryRows.reduce((sum, row) => sum + row[insuranceName], 0),
+      Diff:
+        exactMatchSumCBL -
+        exactMatchSumInsurer +
+        (partialMatchSumCBL - partialMatchSumInsurer) +
+        (noMatchSumCBL - noMatchSumInsurer) +
+        dynamicSummaryRows.reduce((sum, row) => sum + row.Diff, 0),
     },
   ];
 
@@ -80,6 +122,18 @@ export const exportReport = (
     noMatchesInsurerSheet,
     `No Matches Insurer`
   );
+
+  dynamicBuckets.forEach((bucket) => {
+    const bucketSheet = XLSX.utils.json_to_sheet(
+      dynamicBucketSheets[bucket.BucketKey] || [],
+    );
+    XLSX.utils.book_append_sheet(workbook, bucketSheet, bucket.BucketKey);
+  });
+
+  if (dynamicBuckets.length > 0) {
+    const bucketConfigSheet = XLSX.utils.json_to_sheet(dynamicBuckets);
+    XLSX.utils.book_append_sheet(workbook, bucketConfigSheet, "_BucketConfig");
+  }
 
   return workbook;
 };

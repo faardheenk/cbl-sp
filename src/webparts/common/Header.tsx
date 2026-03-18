@@ -32,6 +32,8 @@ const Header: React.FC = () => {
     partialMatchInsurer,
     noMatchCBL,
     noMatchInsurer,
+    dynamicBuckets,
+    dynamicBucketData,
   } = useReconciliation();
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -57,6 +59,17 @@ const Header: React.FC = () => {
     console.log("Export report clicked");
     const mergedExactMatch = mergeData(exactMatchCBL, exactMatchInsurer);
     const mergedPartialMatch = mergeData(partialMatchCBL, partialMatchInsurer);
+    const dynamicBucketSheets = dynamicBuckets.reduce<Record<string, any[]>>(
+      (acc, bucket) => {
+        const bucketRows = dynamicBucketData[bucket.BucketKey] || {
+          cbl: [],
+          insurer: [],
+        };
+        acc[bucket.BucketKey] = mergeData(bucketRows.cbl, bucketRows.insurer);
+        return acc;
+      },
+      {},
+    );
 
     const workbook = exportReport(
       exactMatchSum1,
@@ -70,6 +83,8 @@ const Header: React.FC = () => {
       noMatchCBL,
       noMatchInsurer,
       insuranceName || "",
+      dynamicBuckets,
+      dynamicBucketSheets,
     );
 
     // Generate filename with current date

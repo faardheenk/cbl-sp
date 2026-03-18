@@ -19,6 +19,7 @@ import {
   LinkOutlined,
 } from "@ant-design/icons";
 import "react-resizable/css/styles.css";
+import { BucketKey } from "../../../utils/reconciliationBuckets";
 
 // Custom styles for resizable handles and consistent row heights
 const resizableStyles = `
@@ -215,10 +216,11 @@ type Props = {
   currentPage?: number;
   onCurrentPageChange?: (currentPage: number) => void;
   // Action menu props
-  sectionType?: "exact" | "partial" | "no-match";
+  sectionType?: BucketKey;
   onUnmatch?: () => void;
   onMoveToExactMatch?: () => void;
   onMoveToPartialMatch?: () => void;
+  actionMenuItems?: MenuProps["items"];
   // Scroll synchronization props
   syncScrollEnabled?: boolean;
   onSyncScrollChange?: (enabled: boolean) => void;
@@ -325,6 +327,7 @@ function MatchableDataTable({
   onUnmatch,
   onMoveToExactMatch,
   onMoveToPartialMatch,
+  actionMenuItems,
   syncScrollEnabled = false,
   onSyncScrollChange,
   onScroll,
@@ -662,6 +665,10 @@ function MatchableDataTable({
 
   // Build action menu items based on section type
   const getActionMenuItems = useCallback((): MenuProps["items"] => {
+    if (actionMenuItems) {
+      return actionMenuItems;
+    }
+
     const items: MenuProps["items"] = [];
 
     if (sectionType === "exact" || sectionType === "partial") {
@@ -701,7 +708,13 @@ function MatchableDataTable({
     }
 
     return items;
-  }, [sectionType, onUnmatch, onMoveToExactMatch, onMoveToPartialMatch]);
+  }, [
+    actionMenuItems,
+    sectionType,
+    onUnmatch,
+    onMoveToExactMatch,
+    onMoveToPartialMatch,
+  ]);
 
   // Action column for selected rows
   const actionColumn = useMemo(() => {
@@ -825,9 +838,15 @@ function MatchableDataTable({
       // Determine if we're selecting or deselecting
       const isSelecting = !isCurrentlySelected;
 
-      // For CBL table with group_id, when SELECTING, include all rows with the same group_id
-      // When DESELECTING, only deselect the clicked row (not all related rows)
-      if (fileType === 1 && row.group_id && isSelecting) {
+      // Partial-match groups should select together on the CBL side.
+      // Exact and other sections may carry backend group_id values that are not
+      // safe for UI bulk-selection.
+      if (
+        fileType === 1 &&
+        sectionType === "partial" &&
+        row.group_id &&
+        isSelecting
+      ) {
         const rowsWithSameGroup = data.filter(
           (r) =>
             r.idx !== row.idx &&

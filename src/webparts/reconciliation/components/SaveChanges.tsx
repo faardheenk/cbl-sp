@@ -45,6 +45,8 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
     actionHistory,
     matchHistoryEntries,
     setMatchHistoryEntries,
+    dynamicBuckets,
+    dynamicBucketData,
   } = useReconciliation();
 
   const toasterId = useId("toaster");
@@ -118,6 +120,19 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
               partialMatchInsurer
             );
             const addPostfixNoMatchInsurer = addPostfix(noMatchInsurer);
+            const dynamicBucketSheets = dynamicBuckets.reduce<
+              Record<string, any[]>
+            >((acc, bucket) => {
+              const bucketRows = dynamicBucketData[bucket.BucketKey] || {
+                cbl: [],
+                insurer: [],
+              };
+              acc[bucket.BucketKey] = mergeData(
+                bucketRows.cbl,
+                bucketRows.insurer,
+              );
+              return acc;
+            }, {});
 
             console.log("mergedExactMatch >>> ", mergedExactMatch);
             console.log("mergedPartialMatch >>> ", mergedPartialMatch);
@@ -137,7 +152,9 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
                 noMatchSum1,
                 noMatchSum2,
                 insuranceName || "",
-                `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/${insuranceName}/${date}`
+                `${context.pageContext.web.serverRelativeUrl}/Reconciliation Library/${insuranceName}/${date}`,
+                dynamicBuckets,
+                dynamicBucketSheets,
               );
 
               if (res.status === 200) {

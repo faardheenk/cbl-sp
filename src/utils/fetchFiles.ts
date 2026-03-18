@@ -1,10 +1,13 @@
 // import { useSpContext } from "../SpContext";
 import * as XLSX from "xlsx";
 import { SPFI } from "@pnp/sp";
-import { useEffect } from "react";
 import { filterData, splitData } from "./filterData";
 import { convertToTableColumns } from "./utils";
 import { ColumnsType } from "antd/es/table";
+import {
+  BucketRows,
+  DynamicBucketDefinition,
+} from "./reconciliationBuckets";
 
 export type FetchedFileType = {
   exactMatchCBL: any[];
@@ -13,6 +16,8 @@ export type FetchedFileType = {
   partialMatchInsurer: any[];
   noMatchCBL: any[];
   noMatchInsurer: any[];
+  dynamicBuckets: DynamicBucketDefinition[];
+  dynamicBucketData: Record<string, BucketRows>;
   columnNames: {
     cbl: ColumnsType;
     insurer: ColumnsType;
@@ -46,6 +51,7 @@ export const fetchFile = async (
     const partialMatchesWorksheet = workbook.Sheets["Partial Matches"];
     const noMatchesFile1Worksheet = workbook.Sheets["No Matches CBL"];
     const noMatchesFile2Worksheet = workbook.Sheets["No Matches Insurer"];
+    const bucketConfigWorksheet = workbook.Sheets["_BucketConfig"];
 
     const exactMatches = XLSX.utils.sheet_to_json(exactMatchesWorksheet, {
       defval: "",
@@ -80,6 +86,30 @@ export const fetchFile = async (
 
     const noMatchInsurer = filterData("_INSURER", noMatchInsurerJson);
 
+    const dynamicBuckets = bucketConfigWorksheet
+      ? (XLSX.utils.sheet_to_json(bucketConfigWorksheet, {
+          defval: "",
+        }) as DynamicBucketDefinition[])
+          .filter((bucket) => bucket.BucketKey)
+          .map((bucket) => ({
+            BucketName: bucket.BucketName || bucket.BucketKey,
+            BucketKey: bucket.BucketKey,
+          }))
+      : [];
+
+    const dynamicBucketData = dynamicBuckets.reduce<Record<string, BucketRows>>(
+      (acc, bucket) => {
+        const bucketWorksheet = workbook.Sheets[bucket.BucketKey];
+        const bucketJson = bucketWorksheet
+          ? XLSX.utils.sheet_to_json(bucketWorksheet, { defval: "" })
+          : [];
+
+        acc[bucket.BucketKey] = splitData(bucketJson, bucket.BucketKey);
+        return acc;
+      },
+      {},
+    );
+
     // Columns to exclude from display (internal/metadata columns)
     const columnsToExclude = [
       "matched_insurer_indices",
@@ -113,14 +143,24 @@ export const fetchFile = async (
       "amount_difference",
     ];
 
-    const cblColumns =
-      noMatchCBL && noMatchCBL.length > 0
-        ? Object.keys(noMatchCBL[0] as Record<string, any>)
-        : [];
-    const insurerColumns =
-      noMatchInsurer && noMatchInsurer.length > 0
-        ? Object.keys(noMatchInsurer[0] as Record<string, any>)
-        : [];
+    const firstDynamicBucket = dynamicBuckets[0]?.BucketKey;
+    const sampleCblRow =
+      noMatchCBL[0] ||
+      exactMatchCBL[0] ||
+      partialMatchCBL[0] ||
+      (firstDynamicBucket ? dynamicBucketData[firstDynamicBucket]?.cbl?.[0] : null);
+    const sampleInsurerRow =
+      noMatchInsurer[0] ||
+      exactMatchInsurer[0] ||
+      partialMatchInsurer[0] ||
+      (firstDynamicBucket
+        ? dynamicBucketData[firstDynamicBucket]?.insurer?.[0]
+        : null);
+
+    const cblColumns = sampleCblRow ? Object.keys(sampleCblRow as Record<string, any>) : [];
+    const insurerColumns = sampleInsurerRow
+      ? Object.keys(sampleInsurerRow as Record<string, any>)
+      : [];
 
     // Filter out excluded columns and idx
     const filteredCblColumns = cblColumns.filter(
@@ -140,6 +180,8 @@ export const fetchFile = async (
       partialMatchInsurer,
       noMatchCBL,
       noMatchInsurer,
+      dynamicBuckets,
+      dynamicBucketData,
       columnNames: {
         cbl: cblTableColumns,
         insurer: insurerTableColumns,

@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useSpContext } from "../../../SpContext";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { Button, useId, Toaster } from "@fluentui/react-components";
+import { Dropdown } from "antd";
+import type { MenuProps } from "antd";
 import { fetchFile } from "../../../utils/fetchFiles";
 import styles from "../components/Reconciliation.module.scss";
 import { IListItemFormUpdateValue } from "@pnp/sp/lists";
@@ -32,6 +34,11 @@ import {
   getCanonicalInsurerFingerprint,
   MatchHistoryEntry,
 } from "../../../utils/matchHistory";
+import {
+  BucketKey,
+  BucketRows,
+  isMatchedBucket,
+} from "../../../utils/reconciliationBuckets";
 
 function Reconciliation() {
   const { context, sp } = useSpContext();
@@ -55,6 +62,10 @@ function Reconciliation() {
     setNoMatchCBL,
     noMatchInsurer,
     setNoMatchInsurer,
+    dynamicBuckets,
+    setDynamicBuckets,
+    dynamicBucketData,
+    setDynamicBucketData,
     setPartialMatchSum1,
     setPartialMatchSum2,
     setNoMatchSum1,
@@ -76,6 +87,85 @@ function Reconciliation() {
   const urlParams = new URLSearchParams(window.location.search);
   const insuranceName = urlParams.get("Insurance");
   const date = urlParams.get("Date");
+
+  const getBucketRows = useCallback(
+    (bucketKey: BucketKey): BucketRows => {
+      switch (bucketKey) {
+        case "exact":
+          return { cbl: exactMatchCBL, insurer: exactMatchInsurer };
+        case "partial":
+          return { cbl: partialMatchCBL, insurer: partialMatchInsurer };
+        case "no-match":
+          return { cbl: noMatchCBL, insurer: noMatchInsurer };
+        default:
+          return dynamicBucketData[bucketKey] || { cbl: [], insurer: [] };
+      }
+    },
+    [
+      exactMatchCBL,
+      exactMatchInsurer,
+      partialMatchCBL,
+      partialMatchInsurer,
+      noMatchCBL,
+      noMatchInsurer,
+      dynamicBucketData,
+    ],
+  );
+
+  const setBucketRows = useCallback(
+    (bucketKey: BucketKey, side: "cbl" | "insurer", rows: any[]) => {
+      switch (bucketKey) {
+        case "exact":
+          if (side === "cbl") {
+            setExactMatchCBL(rows);
+          } else {
+            setExactMatchInsurer(rows);
+          }
+          return;
+        case "partial":
+          if (side === "cbl") {
+            setPartialMatchCBL(rows);
+          } else {
+            setPartialMatchInsurer(rows);
+          }
+          return;
+        case "no-match":
+          if (side === "cbl") {
+            setNoMatchCBL(rows);
+          } else {
+            setNoMatchInsurer(rows);
+          }
+          return;
+        default:
+          setDynamicBucketData((prev) => ({
+            ...prev,
+            [bucketKey]: {
+              ...(prev[bucketKey] || { cbl: [], insurer: [] }),
+              [side]: rows,
+            },
+          }));
+      }
+    },
+    [
+      setExactMatchCBL,
+      setExactMatchInsurer,
+      setPartialMatchCBL,
+      setPartialMatchInsurer,
+      setNoMatchCBL,
+      setNoMatchInsurer,
+      setDynamicBucketData,
+    ],
+  );
+
+  const getAllBucketKeys = useCallback(
+    (): BucketKey[] => [
+      "exact",
+      "partial",
+      "no-match",
+      ...dynamicBuckets.map((bucket) => bucket.BucketKey),
+    ],
+    [dynamicBuckets],
+  );
 
   // Helper function to trigger clearing all selections
   const triggerClearAllSelections = useCallback(() => {
@@ -100,12 +190,24 @@ function Reconciliation() {
       if (actionsToUndo.length === 0) return;
 
       // Track cumulative changes
-      let currentExactMatchCBL = [...exactMatchCBL];
-      let currentExactMatchInsurer = [...exactMatchInsurer];
-      let currentPartialMatchCBL = [...partialMatchCBL];
-      let currentPartialMatchInsurer = [...partialMatchInsurer];
-      let currentNoMatchCBL = [...noMatchCBL];
-      let currentNoMatchInsurer = [...noMatchInsurer];
+      const currentBucketData = getAllBucketKeys().reduce<
+        Record<string, BucketRows>
+      >((acc, bucketKey) => {
+        const bucketRows = getBucketRows(bucketKey);
+        acc[bucketKey] = {
+          cbl: [...bucketRows.cbl],
+          insurer: [...bucketRows.insurer],
+        };
+        return acc;
+      }, {});
+
+      const getCurrentBucketRows = (bucketKey: BucketKey): BucketRows => {
+        if (!currentBucketData[bucketKey]) {
+          currentBucketData[bucketKey] = { cbl: [], insurer: [] };
+        }
+
+        return currentBucketData[bucketKey];
+      };
 
       // Process each action in reverse
       actionsToUndo.forEach((action) => {
@@ -167,119 +269,61 @@ function Reconciliation() {
           return result;
         };
 
-        // Remove from the destination section
-        if (toSection === "exact") {
-          currentExactMatchCBL = removeRowsByMatch(
-            currentExactMatchCBL,
-            cblRows,
-          );
-          currentExactMatchInsurer = removeRowsByMatch(
-            currentExactMatchInsurer,
-            insurerRows,
-          );
-        } else if (toSection === "partial") {
-          currentPartialMatchCBL = removeRowsByMatch(
-            currentPartialMatchCBL,
-            cblRows,
-          );
-          currentPartialMatchInsurer = removeRowsByMatch(
-            currentPartialMatchInsurer,
-            insurerRows,
-          );
-        } else if (toSection === "no-match") {
-          currentNoMatchCBL = removeRowsByMatch(currentNoMatchCBL, cblRows);
-          currentNoMatchInsurer = removeRowsByMatch(
-            currentNoMatchInsurer,
-            insurerRows,
-          );
-        }
+        const destinationRows = getCurrentBucketRows(toSection);
+        destinationRows.cbl = removeRowsByMatch(destinationRows.cbl, cblRows);
+        destinationRows.insurer = removeRowsByMatch(
+          destinationRows.insurer,
+          insurerRows,
+        );
 
-        // Add back to the source section at original indices
-        if (fromSection === "exact") {
-          currentExactMatchCBL = insertRowsAtIndices(
-            currentExactMatchCBL,
-            cblRows,
-            cblRowIndices || [],
-          );
-          currentExactMatchInsurer = insertRowsAtIndices(
-            currentExactMatchInsurer,
-            insurerRows,
-            insurerRowIndices || [],
-          );
-        } else if (fromSection === "partial") {
-          currentPartialMatchCBL = insertRowsAtIndices(
-            currentPartialMatchCBL,
-            cblRows,
-            cblRowIndices || [],
-          );
-          currentPartialMatchInsurer = insertRowsAtIndices(
-            currentPartialMatchInsurer,
-            insurerRows,
-            insurerRowIndices || [],
-          );
-        } else if (fromSection === "no-match") {
-          currentNoMatchCBL = insertRowsAtIndices(
-            currentNoMatchCBL,
-            cblRows,
-            cblRowIndices || [],
-          );
-          currentNoMatchInsurer = insertRowsAtIndices(
-            currentNoMatchInsurer,
-            insurerRows,
-            insurerRowIndices || [],
-          );
-        }
+        const sourceRows = getCurrentBucketRows(fromSection);
+        sourceRows.cbl = insertRowsAtIndices(
+          sourceRows.cbl,
+          cblRows,
+          cblRowIndices || [],
+        );
+        sourceRows.insurer = insertRowsAtIndices(
+          sourceRows.insurer,
+          insurerRows,
+          insurerRowIndices || [],
+        );
       });
 
       // Check if any undone action was a move from partial to exact
       // If so, we need to repair match_insurer_indices for the restored partial match rows
-      const hasPartialToExactUndo = actionsToUndo.some(
+      const hasPartialToMatchedUndo = actionsToUndo.some(
         (action) =>
-          action.actionType === "moveToExact" && action.fromSection === "partial",
+          action.fromSection === "partial" && isMatchedBucket(action.toSection),
       );
 
-      // Regenerate indices for all affected sections
-      const regeneratedExactMatchCBL = regenerateIdx(
-        currentExactMatchCBL,
-        "exact",
-      );
-      const regeneratedExactMatchInsurer = regenerateIdx(
-        currentExactMatchInsurer,
-        "exact",
-      );
-      let regeneratedPartialMatchCBL = regenerateIdx(
-        currentPartialMatchCBL,
-        "partial",
-      );
-      const regeneratedPartialMatchInsurer = regenerateIdx(
-        currentPartialMatchInsurer,
-        "partial",
-      );
+      const nextDynamicBucketData: Record<string, BucketRows> = {};
 
-      // Repair match_insurer_indices if we undid a partial to exact move
-      if (hasPartialToExactUndo) {
-        regeneratedPartialMatchCBL = repairMatchedIndicesAfterUndo(
-          regeneratedPartialMatchCBL,
-          regeneratedPartialMatchInsurer,
-        );
-      }
+      getAllBucketKeys().forEach((bucketKey) => {
+        const currentRows = getCurrentBucketRows(bucketKey);
+        const regeneratedCBL = regenerateIdx(currentRows.cbl, bucketKey);
+        const regeneratedInsurer = regenerateIdx(currentRows.insurer, bucketKey);
 
-      const regeneratedNoMatchCBL = regenerateIdx(
-        currentNoMatchCBL,
-        "no-match",
-      );
-      const regeneratedNoMatchInsurer = regenerateIdx(
-        currentNoMatchInsurer,
-        "no-match",
-      );
+        const finalCBL =
+          bucketKey === "partial" && hasPartialToMatchedUndo
+            ? repairMatchedIndicesAfterUndo(regeneratedCBL, regeneratedInsurer)
+            : regeneratedCBL;
 
-      // Update all state
-      setExactMatchCBL(regeneratedExactMatchCBL);
-      setExactMatchInsurer(regeneratedExactMatchInsurer);
-      setPartialMatchCBL(regeneratedPartialMatchCBL);
-      setPartialMatchInsurer(regeneratedPartialMatchInsurer);
-      setNoMatchCBL(regeneratedNoMatchCBL);
-      setNoMatchInsurer(regeneratedNoMatchInsurer);
+        if (
+          bucketKey === "exact" ||
+          bucketKey === "partial" ||
+          bucketKey === "no-match"
+        ) {
+          setBucketRows(bucketKey, "cbl", finalCBL);
+          setBucketRows(bucketKey, "insurer", regeneratedInsurer);
+        } else {
+          nextDynamicBucketData[bucketKey] = {
+            cbl: finalCBL,
+            insurer: regeneratedInsurer,
+          };
+        }
+      });
+
+      setDynamicBucketData(nextDynamicBucketData);
 
       // Remove the undone actions from history
       removeFromHistory(actionIds);
@@ -292,20 +336,12 @@ function Reconciliation() {
     },
     [
       actionHistory,
-      exactMatchCBL,
-      exactMatchInsurer,
-      partialMatchCBL,
-      partialMatchInsurer,
-      noMatchCBL,
-      noMatchInsurer,
-      setExactMatchCBL,
-      setExactMatchInsurer,
-      setPartialMatchCBL,
-      setPartialMatchInsurer,
-      setNoMatchCBL,
-      setNoMatchInsurer,
+      getAllBucketKeys,
+      getBucketRows,
+      setBucketRows,
       removeFromHistory,
       setChanges,
+      setDynamicBucketData,
       triggerClearAllSelections,
     ],
   );
@@ -327,6 +363,8 @@ function Reconciliation() {
           partialMatchInsurer,
           noMatchCBL,
           noMatchInsurer,
+          dynamicBuckets,
+          dynamicBucketData,
           columnNames,
         } = await fetchFile(url, sp);
         console.log("[Initial Render] Exact Match CBL:", exactMatchCBL);
@@ -344,6 +382,8 @@ function Reconciliation() {
         setPartialMatchInsurer(partialMatchInsurer);
         setNoMatchCBL(noMatchCBL);
         setNoMatchInsurer(noMatchInsurer);
+        setDynamicBuckets(dynamicBuckets);
+        setDynamicBucketData(dynamicBucketData);
 
         setCblColumns(columnNames.cbl);
         setInsurerColumns(columnNames.insurer);
@@ -391,7 +431,14 @@ function Reconciliation() {
 
     fetchData();
     fetchColumnMappings();
-  }, [sp, insuranceName, date, url]);
+  }, [
+    sp,
+    insuranceName,
+    date,
+    url,
+    setDynamicBucketData,
+    setDynamicBuckets,
+  ]);
 
   useEffect(() => {
     const { sum1, sum2 } = calculateSum(exactMatchCBL, exactMatchInsurer);
@@ -423,8 +470,12 @@ function Reconciliation() {
   // Unified function to move rows between sections
   const moveRows = useCallback(
     async (
-      toSection: "exact" | "partial" | "no-match",
-      actionType: "moveToExact" | "moveToPartial" | "unmatch",
+      toSection: BucketKey,
+      actionType:
+        | "moveToExact"
+        | "moveToPartial"
+        | "unmatch"
+        | "moveToBucket",
     ) => {
       if (selectedRowCBL.length === 0 || selectedRowInsurer.length === 0) {
         return;
@@ -435,30 +486,12 @@ function Reconciliation() {
       setMatrix((prev) => [...prev, matrixKey]);
 
       // Determine source section
-      const findSourceSection = () => {
-        if (
-          exactMatchCBL.some((row) =>
+      const findSourceSection = (): BucketKey | null =>
+        getAllBucketKeys().find((bucketKey) =>
+          getBucketRows(bucketKey).cbl.some((row) =>
             selectedRowCBL.some((selected) => selected.idx === row.idx),
-          )
-        ) {
-          return "exact";
-        }
-        if (
-          partialMatchCBL.some((row) =>
-            selectedRowCBL.some((selected) => selected.idx === row.idx),
-          )
-        ) {
-          return "partial";
-        }
-        if (
-          noMatchCBL.some((row) =>
-            selectedRowCBL.some((selected) => selected.idx === row.idx),
-          )
-        ) {
-          return "no-match";
-        }
-        return null;
-      };
+          ),
+        ) || null;
 
       const fromSection = findSourceSection();
       if (!fromSection) {
@@ -466,52 +499,8 @@ function Reconciliation() {
         return;
       }
 
-      // Get source arrays
-      const getSourceArrays = () => {
-        switch (fromSection) {
-          case "exact":
-            return { cbl: exactMatchCBL, insurer: exactMatchInsurer };
-          case "partial":
-            return { cbl: partialMatchCBL, insurer: partialMatchInsurer };
-          case "no-match":
-            return { cbl: noMatchCBL, insurer: noMatchInsurer };
-        }
-      };
-
-      const getDestinationArrays = () => {
-        switch (toSection) {
-          case "exact":
-            return { cbl: exactMatchCBL, insurer: exactMatchInsurer };
-          case "partial":
-            return { cbl: partialMatchCBL, insurer: partialMatchInsurer };
-          case "no-match":
-            return { cbl: noMatchCBL, insurer: noMatchInsurer };
-        }
-      };
-
-      const getSetters = () => {
-        switch (toSection) {
-          case "exact":
-            return {
-              cbl: setExactMatchCBL,
-              insurer: setExactMatchInsurer,
-            };
-          case "partial":
-            return {
-              cbl: setPartialMatchCBL,
-              insurer: setPartialMatchInsurer,
-            };
-          case "no-match":
-            return {
-              cbl: setNoMatchCBL,
-              insurer: setNoMatchInsurer,
-            };
-        }
-      };
-
-      const source = getSourceArrays();
-      const destination = getDestinationArrays();
-      const setters = getSetters();
+      const source = getBucketRows(fromSection);
+      const destination = getBucketRows(toSection);
 
       // Helper to check if a row is blank
       const isBlankRow = (row: any): boolean => {
@@ -909,8 +898,8 @@ function Reconciliation() {
         addMatchHistoryEntry(historyEntry);
       }
 
-      // Handle special case: partial to exact (uses manualMatching)
-      if (fromSection === "partial" && toSection === "exact") {
+      // Handle special case: partial to matched buckets (uses manualMatching)
+      if (fromSection === "partial" && isMatchedBucket(toSection)) {
         const getTargetInsurerIdxs = (cblRow: any): string[] => {
           if (
             !cblRow?.matched_insurer_indices ||
@@ -1190,10 +1179,10 @@ function Reconciliation() {
         setPartialMatchInsurer(regeneratedPartialInsurer);
         setNoMatchInsurer(regeneratedNoMatchInsurer);
 
-        // Add selected rows to exact match
+        // Add selected rows to the destination matched bucket
         const nextMatchGroup = getNextMatchGroup(
-          exactMatchCBL,
-          exactMatchInsurer,
+          destination.cbl,
+          destination.insurer,
         );
 
         const exactMatchRowsWithGroupCBL = addGroupAndCondition(
@@ -1205,35 +1194,41 @@ function Reconciliation() {
           nextMatchGroup,
         );
 
-        // Add to exact match destination
-        const newExactMatchCBL = [
-          ...exactMatchCBL,
+        const newMatchedBucketCBL = [
+          ...destination.cbl,
           ...exactMatchRowsWithGroupCBL,
         ];
-        const newExactMatchInsurer = [
-          ...exactMatchInsurer,
+        const newMatchedBucketInsurer = [
+          ...destination.insurer,
           ...exactMatchRowsWithGroupInsurer,
         ];
 
-        // Re-equalize exact match tables
-        const [equalizedExactCBL, equalizedExactInsurer] =
+        const [equalizedDestinationCBL, equalizedDestinationInsurer] =
           equalizeWorksheetLengths(
-            newExactMatchCBL,
-            newExactMatchInsurer,
+            newMatchedBucketCBL,
+            newMatchedBucketInsurer,
             nextMatchGroup,
           );
 
         console.log(
-          "[Move To Exact] Updated Exact Match CBL:",
-          equalizedExactCBL,
+          `[Move] Updated ${toSection} CBL:`,
+          equalizedDestinationCBL,
         );
         console.log(
-          "[Move To Exact] Updated Exact Match Insurer:",
-          equalizedExactInsurer,
+          `[Move] Updated ${toSection} Insurer:`,
+          equalizedDestinationInsurer,
         );
 
-        setExactMatchCBL(regenerateIdx(equalizedExactCBL, "exact"));
-        setExactMatchInsurer(regenerateIdx(equalizedExactInsurer, "exact"));
+        setBucketRows(
+          toSection,
+          "cbl",
+          regenerateIdx(equalizedDestinationCBL, toSection),
+        );
+        setBucketRows(
+          toSection,
+          "insurer",
+          regenerateIdx(equalizedDestinationInsurer, toSection),
+        );
 
         setSelectedRowCBL([]);
         setSelectedRowInsurer([]);
@@ -1253,7 +1248,7 @@ function Reconciliation() {
         let finalSourceCBL = sourceCBLWithoutBlanks;
         let finalSourceInsurer = sourceInsurerWithoutBlanks;
 
-        if (fromSection === "exact" || fromSection === "partial") {
+        if (isMatchedBucket(fromSection)) {
           const currentSourceMatchGroup = getNextMatchGroup(
             sourceCBLWithoutBlanks,
             sourceInsurerWithoutBlanks,
@@ -1272,21 +1267,8 @@ function Reconciliation() {
           fromSection,
         );
 
-        // Update source state
-        switch (fromSection) {
-          case "exact":
-            setExactMatchCBL(regeneratedSourceCBL);
-            setExactMatchInsurer(regeneratedSourceInsurer);
-            break;
-          case "partial":
-            setPartialMatchCBL(regeneratedSourceCBL);
-            setPartialMatchInsurer(regeneratedSourceInsurer);
-            break;
-          case "no-match":
-            setNoMatchCBL(regeneratedSourceCBL);
-            setNoMatchInsurer(regeneratedSourceInsurer);
-            break;
-        }
+        setBucketRows(fromSection, "cbl", regeneratedSourceCBL);
+        setBucketRows(fromSection, "insurer", regeneratedSourceInsurer);
       }
 
       // Add to destination
@@ -1333,9 +1315,8 @@ function Reconciliation() {
         toSection,
       );
 
-      // Update destination state
-      setters.cbl(regeneratedDestinationCBL);
-      setters.insurer(regeneratedDestinationInsurer);
+      setBucketRows(toSection, "cbl", regeneratedDestinationCBL);
+      setBucketRows(toSection, "insurer", regeneratedDestinationInsurer);
 
       // Clear selections
       setSelectedRowCBL([]);
@@ -1351,17 +1332,16 @@ function Reconciliation() {
       partialMatchInsurer,
       noMatchCBL,
       noMatchInsurer,
-      setExactMatchCBL,
-      setExactMatchInsurer,
-      setPartialMatchCBL,
-      setPartialMatchInsurer,
-      setNoMatchCBL,
-      setNoMatchInsurer,
+      getAllBucketKeys,
+      getBucketRows,
+      setBucketRows,
       setChanges,
       addToHistory,
+      addMatchHistoryEntry,
       triggerClearAllSelections,
-      matrix,
       setMatrix,
+      setSelectedRowCBL,
+      setSelectedRowInsurer,
     ],
   );
 
@@ -1783,6 +1763,129 @@ function Reconciliation() {
     await moveRows("exact", "moveToExact");
   };
 
+  const handleMoveToBucket = useCallback(
+    async (bucketKey: BucketKey) => {
+      const actionType =
+        bucketKey === "exact"
+          ? "moveToExact"
+          : bucketKey === "partial"
+            ? "moveToPartial"
+            : bucketKey === "no-match"
+              ? "unmatch"
+              : "moveToBucket";
+
+      await moveRows(bucketKey, actionType);
+    },
+    [moveRows],
+  );
+
+  const getActionMenuItemsForSection = useCallback(
+    (sectionKey: BucketKey): MenuProps["items"] => {
+      const items: MenuProps["items"] = [];
+
+      if (sectionKey !== "exact") {
+        items.push({
+          key: "moveToExact",
+          label: "Move to Exact Match",
+          onClick: () => {
+            void handleMoveToBucket("exact");
+          },
+        });
+      }
+
+      if (sectionKey !== "partial") {
+        items.push({
+          key: "moveToPartial",
+          label: "Move to Partial Match",
+          onClick: () => {
+            void handleMoveToBucket("partial");
+          },
+        });
+      }
+
+      dynamicBuckets
+        .filter((bucket) => bucket.BucketKey !== sectionKey)
+        .forEach((bucket) => {
+          items.push({
+            key: `moveTo-${bucket.BucketKey}`,
+            label: `Move to ${bucket.BucketName}`,
+            onClick: () => {
+              void handleMoveToBucket(bucket.BucketKey);
+            },
+          });
+        });
+
+      if (sectionKey !== "no-match") {
+        items.push({
+          key: "unmatch",
+          label: "Unmatch",
+          onClick: () => {
+            void handleMoveToBucket("no-match");
+          },
+        });
+      }
+
+      return items;
+    },
+    [dynamicBuckets, handleMoveToBucket],
+  );
+
+  const getBucketLabel = useCallback(
+    (bucketKey: BucketKey): string => {
+      switch (bucketKey) {
+        case "exact":
+          return "Exact Matches";
+        case "partial":
+          return "Partial Matches";
+        case "no-match":
+          return "No Matches";
+        default:
+          return (
+            dynamicBuckets.find((bucket) => bucket.BucketKey === bucketKey)
+              ?.BucketName || bucketKey
+          );
+      }
+    },
+    [dynamicBuckets],
+  );
+
+  const getSelectedSourceSection = useCallback((): BucketKey | null => {
+    if (selectedRowCBL.length === 0 && selectedRowInsurer.length === 0) {
+      return null;
+    }
+
+    return (
+      getAllBucketKeys().find((bucketKey) => {
+        const bucketRows = getBucketRows(bucketKey);
+        return (
+          selectedRowCBL.some((selected) =>
+            bucketRows.cbl.some((row) => row.idx === selected.idx),
+          ) ||
+          selectedRowInsurer.some((selected) =>
+            bucketRows.insurer.some((row) => row.idx === selected.idx),
+          )
+        );
+      }) || null
+    );
+  }, [
+    selectedRowCBL,
+    selectedRowInsurer,
+    getAllBucketKeys,
+    getBucketRows,
+  ]);
+
+  const selectedSourceSection = getSelectedSourceSection();
+  const headerMoveMenuItems: MenuProps["items"] = getAllBucketKeys().map(
+    (bucketKey) => ({
+      key: bucketKey,
+      label: getBucketLabel(bucketKey),
+      disabled: !selectedSourceSection || selectedSourceSection === bucketKey,
+      onClick: () => {
+        void handleMoveToBucket(bucketKey);
+      },
+    }),
+  );
+
   // Legacy code below - keeping for reference but should be removed
   const _handleMoveToExactMatch_OLD = async () => {
     if (selectedRowCBL.length > 0 && selectedRowInsurer.length > 0) {
@@ -1970,7 +2073,24 @@ function Reconciliation() {
         {/* Exact Matches Header */}
         <div className={styles.partialHeader}>
           <div></div>
-          <SaveChanges onUndo={handleUndoActions} />
+          <div className="d-flex gap-2">
+            <Dropdown
+              menu={{ items: headerMoveMenuItems }}
+              trigger={["click"]}
+              disabled={!selectedSourceSection}
+            >
+              <span>
+                <Button
+                  className={styles.btn}
+                  appearance="primary"
+                  disabled={!selectedSourceSection}
+                >
+                  Move
+                </Button>
+              </span>
+            </Dropdown>
+            <SaveChanges onUndo={handleUndoActions} />
+          </div>
         </div>
 
         {/* Exact Matches */}
@@ -1981,59 +2101,8 @@ function Reconciliation() {
           clearSelections={clearAllSelections}
           loading={isLoading}
           onUnmatch={handleUnmatch}
+          actionMenuItems={getActionMenuItemsForSection("exact")}
         />
-
-        {/* Partial Matches Header */}
-        <div className={styles.partialHeader}>
-          <div></div>
-          <div className="d-flex gap-2">
-            <Button
-              className={styles.btn}
-              appearance="primary"
-              disabled={
-                selectedRowCBL.length === 0 ||
-                selectedRowInsurer.length === 0 ||
-                // Check if any selected rows are from no match section (can't unmatch from no match)
-                selectedRowCBL.some((selectedRow) =>
-                  noMatchCBL.some(
-                    (noMatchRow) => noMatchRow.idx === selectedRow.idx,
-                  ),
-                ) ||
-                selectedRowInsurer.some((selectedRow) =>
-                  noMatchInsurer.some(
-                    (noMatchRow) => noMatchRow.idx === selectedRow.idx,
-                  ),
-                )
-              }
-              onClick={handleUnmatch}
-            >
-              Unmatch
-            </Button>
-
-            <Button
-              className={styles.btn}
-              appearance="primary"
-              disabled={
-                selectedRowCBL.length === 0 ||
-                selectedRowInsurer.length === 0 ||
-                // Check if any selected rows are from exact matches
-                selectedRowCBL.some((selectedRow) =>
-                  exactMatchCBL.some(
-                    (exactRow) => exactRow.idx === selectedRow.idx,
-                  ),
-                ) ||
-                selectedRowInsurer.some((selectedRow) =>
-                  exactMatchInsurer.some(
-                    (exactRow) => exactRow.idx === selectedRow.idx,
-                  ),
-                )
-              }
-              onClick={handleMoveToExactMatch}
-            >
-              Move to exact match
-            </Button>
-          </div>
-        </div>
 
         {/* Partial Matches Bodies */}
         <MatchableComponent
@@ -2044,33 +2113,8 @@ function Reconciliation() {
           loading={isLoading}
           onUnmatch={handleUnmatch}
           onMoveToExactMatch={handleMoveToExactMatch}
+          actionMenuItems={getActionMenuItemsForSection("partial")}
         />
-
-        <div className={styles.partialHeader}>
-          <div></div>
-          <Button
-            className={styles.btn}
-            appearance="primary"
-            disabled={
-              selectedRowCBL.length === 0 ||
-              selectedRowInsurer.length === 0 ||
-              // Check if any selected rows are from no match section
-              !selectedRowCBL.some((selectedRow) =>
-                noMatchCBL.some(
-                  (noMatchRow) => noMatchRow.idx === selectedRow.idx,
-                ),
-              ) ||
-              !selectedRowInsurer.some((selectedRow) =>
-                noMatchInsurer.some(
-                  (noMatchRow) => noMatchRow.idx === selectedRow.idx,
-                ),
-              )
-            }
-            onClick={handleMoveToPartialMatch}
-          >
-            Move to partial match
-          </Button>
-        </div>
 
         {/* No Matches */}
         <MatchableComponent
@@ -2081,7 +2125,53 @@ function Reconciliation() {
           loading={isLoading}
           onMoveToExactMatch={handleMoveToExactMatch}
           onMoveToPartialMatch={handleMoveToPartialMatch}
+          actionMenuItems={getActionMenuItemsForSection("no-match")}
         />
+
+        {dynamicBuckets.map((bucket) => {
+          const bucketRows = dynamicBucketData[bucket.BucketKey] || {
+            cbl: [],
+            insurer: [],
+          };
+
+          return (
+            <MatchableComponent
+              key={bucket.BucketKey}
+              title={bucket.BucketName}
+              type={bucket.BucketKey}
+              insuranceName={insuranceName || ""}
+              clearSelections={clearAllSelections}
+              loading={isLoading}
+              dataFile1Override={bucketRows.cbl}
+              dataFile2Override={bucketRows.insurer}
+              setMatchesFile1Override={(value) => {
+                setDynamicBucketData((prev) => ({
+                  ...prev,
+                  [bucket.BucketKey]: {
+                    ...(prev[bucket.BucketKey] || { cbl: [], insurer: [] }),
+                    cbl:
+                      typeof value === "function"
+                        ? value(prev[bucket.BucketKey]?.cbl || [])
+                        : value,
+                  },
+                }));
+              }}
+              setMatchesFile2Override={(value) => {
+                setDynamicBucketData((prev) => ({
+                  ...prev,
+                  [bucket.BucketKey]: {
+                    ...(prev[bucket.BucketKey] || { cbl: [], insurer: [] }),
+                    insurer:
+                      typeof value === "function"
+                        ? value(prev[bucket.BucketKey]?.insurer || [])
+                        : value,
+                  },
+                }));
+              }}
+              actionMenuItems={getActionMenuItemsForSection(bucket.BucketKey)}
+            />
+          );
+        })}
       </div>
     </>
   );

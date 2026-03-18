@@ -357,6 +357,8 @@ function UndoModal({ isOpen, onClose, onUndo }: UndoModalProps) {
         return "Moved to Partial Match";
       case "unmatch":
         return "Unmatched";
+      case "moveToBucket":
+        return "Moved";
       default:
         return actionType;
     }
