@@ -1,5 +1,43 @@
 import * as XLSX from "xlsx";
-import { DynamicBucketDefinition } from "./reconciliationBuckets";
+import {
+  DynamicBucketDefinition,
+  normalizeBucketSheetName,
+} from "./reconciliationBuckets";
+
+const RESERVED_SHEET_NAMES = new Set([
+  "Summary",
+  "Exact Matches",
+  "Partial Matches",
+  "No Matches CBL",
+  "No Matches Insurer",
+  "_BucketConfig",
+]);
+
+const createUniqueSheetName = (baseName: string, usedSheetNames: Set<string>): string => {
+  const normalizedBaseName = normalizeBucketSheetName(baseName);
+
+  if (!usedSheetNames.has(normalizedBaseName)) {
+    usedSheetNames.add(normalizedBaseName);
+    return normalizedBaseName;
+  }
+
+  let counter = 2;
+  while (counter < 1000) {
+    const suffix = ` (${counter})`;
+    const candidateName = `${normalizedBaseName.slice(0, 31 - suffix.length)}${suffix}`;
+
+    if (!usedSheetNames.has(candidateName)) {
+      usedSheetNames.add(candidateName);
+      return candidateName;
+    }
+
+    counter += 1;
+  }
+
+  const fallbackSheetName = `${normalizedBaseName.slice(0, 27)}-${Date.now().toString().slice(-3)}`;
+  usedSheetNames.add(fallbackSheetName);
+  return fallbackSheetName;
+};
 
 export const exportReport = (
   exactMatchSumCBL: number,
@@ -16,6 +54,15 @@ export const exportReport = (
   dynamicBuckets: DynamicBucketDefinition[] = [],
   dynamicBucketSheets: Record<string, any[]> = {},
 ) => {
+  const usedSheetNames = new Set(RESERVED_SHEET_NAMES);
+  const exportDynamicBuckets = dynamicBuckets.map((bucket) => ({
+    ...bucket,
+    SheetName: createUniqueSheetName(
+      bucket.BucketName || bucket.BucketKey,
+      usedSheetNames,
+    ),
+  }));
+
   const dynamicSummaryRows = dynamicBuckets.map((bucket) => {
     const bucketRows = dynamicBucketSheets[bucket.BucketKey] || [];
     const cblSum = bucketRows.reduce(
@@ -123,15 +170,19 @@ export const exportReport = (
     `No Matches Insurer`
   );
 
-  dynamicBuckets.forEach((bucket) => {
+  exportDynamicBuckets.forEach((bucket) => {
     const bucketSheet = XLSX.utils.json_to_sheet(
       dynamicBucketSheets[bucket.BucketKey] || [],
     );
-    XLSX.utils.book_append_sheet(workbook, bucketSheet, bucket.BucketKey);
+    XLSX.utils.book_append_sheet(
+      workbook,
+      bucketSheet,
+      bucket.SheetName || bucket.BucketKey,
+    );
   });
 
-  if (dynamicBuckets.length > 0) {
-    const bucketConfigSheet = XLSX.utils.json_to_sheet(dynamicBuckets);
+  if (exportDynamicBuckets.length > 0) {
+    const bucketConfigSheet = XLSX.utils.json_to_sheet(exportDynamicBuckets);
     XLSX.utils.book_append_sheet(workbook, bucketConfigSheet, "_BucketConfig");
   }
 

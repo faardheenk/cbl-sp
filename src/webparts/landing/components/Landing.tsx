@@ -6,6 +6,7 @@ import {
   FolderRegular,
   OpenRegular,
   DeleteRegular,
+  AddRegular,
 } from "@fluentui/react-icons";
 import {
   Button,
@@ -29,7 +30,10 @@ import {
   overwriteMatchHistory,
   readMatchHistory,
 } from "../../../utils/matchHistory";
-import { BucketKey } from "../../../utils/reconciliationBuckets";
+import {
+  BucketKey,
+  generateBucketKey,
+} from "../../../utils/reconciliationBuckets";
 
 const COLORS = {
   primary: "#5A6374", // muted slate gray
@@ -63,6 +67,9 @@ const Landing = () => {
   const [matrixError, setMatrixError] = useState<string | null>(null);
   const [entryPendingDelete, setEntryPendingDelete] =
     useState<MatrixHistoryEntry | null>(null);
+  const [isCreateBucketOpen, setIsCreateBucketOpen] = useState(false);
+  const [newBucketName, setNewBucketName] = useState("");
+  const [isCreatingBucket, setIsCreatingBucket] = useState(false);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
     { name: "Reconciliation Library", path: "", serverRelativeUrl: "" },
   ]);
@@ -205,7 +212,7 @@ const Landing = () => {
         folders
           .filter(
             (folder: IFolderInfo) =>
-              folder.Name !== "Document" && folder.Name !== "Forms"
+              folder.Name !== "Document" && folder.Name !== "Forms",
           )
           .map(async (folder: IFolderInfo) => {
             // Check if this folder has subfolders (reconciliation processes)
@@ -216,7 +223,7 @@ const Landing = () => {
 
               const hasSubFolders = subFolders.some(
                 (sf: IFolderInfo) =>
-                  sf.Name !== "Document" && sf.Name !== "Forms"
+                  sf.Name !== "Document" && sf.Name !== "Forms",
               );
 
               // If we're at root level, show insurance folders
@@ -289,7 +296,7 @@ const Landing = () => {
                 hasSubFolders: false,
               };
             }
-          })
+          }),
       );
 
       // Sort by creation date if available, otherwise by name
@@ -373,6 +380,33 @@ const Landing = () => {
       .map((part) => part.trim())
       .filter((part) => part !== "");
 
+  const buildFingerprintTable = (fingerprints: string[]) => {
+    if (fingerprints.length === 0) return { rows: [], columns: [] };
+
+    const parsed = fingerprints.map((fp) => parseFingerprint(fp));
+    const maxCols = Math.max(...parsed.map((parts) => parts.length), 0);
+
+    const fpColumns: TableProps<any>["columns"] = Array.from(
+      { length: maxCols },
+      (_, i) => ({
+        title: String(i + 1),
+        dataIndex: `col${i}`,
+        key: `col${i}`,
+        ellipsis: true,
+      }),
+    );
+
+    const rows = parsed.map((parts, index) => {
+      const row: Record<string, any> = { key: index };
+      parts.forEach((part, i) => {
+        row[`col${i}`] = part;
+      });
+      return row;
+    });
+
+    return { rows, columns: fpColumns };
+  };
+
   const loadMatrixHistory = async () => {
     if (!sp || !currentInsuranceName) {
       return;
@@ -435,7 +469,9 @@ const Landing = () => {
       dispatchToast(
         <Toast>
           <ToastTitle>Matrix entry deleted</ToastTitle>
-          <ToastBody>`history.xlsx` was updated successfully.</ToastBody>
+          <ToastBody>
+            The matrix history entry has been deleted successfully.
+          </ToastBody>
         </Toast>,
         { position: "top", intent: "success" },
       );
@@ -444,12 +480,69 @@ const Landing = () => {
       dispatchToast(
         <Toast>
           <ToastTitle>Delete failed</ToastTitle>
-          <ToastBody>Could not update `history.xlsx`.</ToastBody>
+          <ToastBody>Could not delete the matrix history entry.</ToastBody>
         </Toast>,
         { position: "top", intent: "error" },
       );
     } finally {
       setIsDeletingMatrixEntry(false);
+    }
+  };
+
+  const handleCreateBucket = async () => {
+    const trimmedName = newBucketName.trim();
+    if (!trimmedName || !sp || !currentInsuranceName) return;
+
+    const bucketKey = generateBucketKey(trimmedName);
+
+    try {
+      setIsCreatingBucket(true);
+      await sp.web.lists.getByTitle("Buckets").items.add({
+        Title: bucketKey,
+        InsuranceCompany: currentInsuranceName.toUpperCase().trim(),
+        BucketName: trimmedName,
+        BucketKey: bucketKey,
+      });
+
+      setIsCreateBucketOpen(false);
+      setNewBucketName("");
+
+      dispatchToast(
+        <Toast
+          style={{
+            backgroundColor: "#d4edda",
+            color: "#155724",
+            borderRadius: "8px",
+          }}
+        >
+          <ToastTitle style={{ color: "#155724" }}>Bucket created</ToastTitle>
+          <ToastBody style={{ color: "#155724" }}>
+            &ldquo;{trimmedName}&rdquo; has been created successfully.
+          </ToastBody>
+        </Toast>,
+        { position: "top", intent: "success" },
+      );
+    } catch (error) {
+      console.error("Failed to create bucket:", error);
+      dispatchToast(
+        <Toast
+          style={{
+            backgroundColor: "#f8d7da",
+            color: "#721c24",
+            borderRadius: "8px",
+          }}
+        >
+          <ToastTitle style={{ color: "#721c24" }}>
+            Bucket creation failed
+          </ToastTitle>
+          <ToastBody style={{ color: "#721c24" }}>
+            Could not create the bucket. Please try again.
+          </ToastBody>
+        </Toast>,
+        { position: "top", intent: "error" },
+      );
+    } finally {
+      setIsCreatingBucket(false);
     }
   };
 
@@ -494,11 +587,9 @@ const Landing = () => {
               active={index === breadcrumbs.length - 1}
               onClick={() => handleBreadcrumbClick(index)}
               style={{
-                cursor: index === breadcrumbs.length - 1 ? "default" : "pointer",
-                color:
-                  index === breadcrumbs.length - 1
-                    ? "#6c757d"
-                    : "#0078d4",
+                cursor:
+                  index === breadcrumbs.length - 1 ? "default" : "pointer",
+                color: index === breadcrumbs.length - 1 ? "#6c757d" : "#0078d4",
                 textDecoration: "none",
               }}
             >
@@ -511,9 +602,17 @@ const Landing = () => {
             style={{
               display: "flex",
               justifyContent: "flex-end",
+              gap: "0.5rem",
               marginTop: "1rem",
             }}
           >
+            <Button
+              appearance="secondary"
+              icon={<AddRegular />}
+              onClick={() => setIsCreateBucketOpen(true)}
+            >
+              Create New Bucket
+            </Button>
             <Button
               appearance="primary"
               onClick={loadMatrixHistory}
@@ -554,8 +653,9 @@ const Landing = () => {
         centered
       >
         <Modal.Header closeButton>
-          <Modal.Title>
-            Matrix History{currentInsuranceName ? ` - ${currentInsuranceName}` : ""}
+          <Modal.Title style={{ fontSize: "1rem", fontWeight: 600 }}>
+            Matrix History
+            {currentInsuranceName ? ` - ${currentInsuranceName}` : ""}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ maxHeight: "75vh", overflowY: "auto" }}>
@@ -564,177 +664,111 @@ const Landing = () => {
           ) : matrixEntries.length === 0 ? (
             <div>No history entries found.</div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {matrixEntries.map((entry) => (
-                <Card key={entry.id} style={{ borderRadius: "0.75rem" }}>
-                  <Card.Body>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        gap: "1rem",
-                        marginBottom: "1rem",
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 600 }}>
-                          {formatBucketLabel(entry.fromBucket)} to{" "}
-                          {formatBucketLabel(entry.targetBucket)}
-                        </div>
-                        <div style={{ color: "#6c757d", fontSize: "0.9rem" }}>
-                          {new Date(entry.timestamp).toLocaleString("en-GB")}
-                        </div>
-                      </div>
-                      <Button
-                        appearance="secondary"
-                        icon={<DeleteRegular />}
-                        onClick={() => handleRequestDeleteMatrixEntry(entry)}
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
+              {matrixEntries.map((entry) => {
+                const cblTable = buildFingerprintTable(entry.cblFingerprints);
+                const insurerTable = buildFingerprintTable(
+                  entry.insurerFingerprints,
+                );
+
+                return (
+                  <Card key={entry.id} style={{ borderRadius: "0.75rem" }}>
+                    <Card.Body>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: "0.75rem",
+                        }}
                       >
-                        Delete Entry
-                      </Button>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "1rem",
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
-                          CBL Fingerprints
+                        <div>
+                          <span
+                            style={{ fontWeight: 600, fontSize: "0.85rem" }}
+                          >
+                            {formatBucketLabel(entry.fromBucket)} &rarr;{" "}
+                            {formatBucketLabel(entry.targetBucket)}
+                          </span>
+                          <span
+                            style={{
+                              color: "#6c757d",
+                              fontSize: "0.8rem",
+                              marginLeft: "0.75rem",
+                            }}
+                          >
+                            {new Date(entry.timestamp).toLocaleString("en-GB")}
+                          </span>
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                          {entry.cblFingerprints.length === 0 ? (
-                            <div style={{ color: "#6c757d" }}>No CBL fingerprints.</div>
-                          ) : (
-                            entry.cblFingerprints.map((fingerprint, index) => (
-                              <div
-                                key={`cbl-${entry.id}-${index}`}
-                                style={{
-                                  border: "1px solid #e5e7eb",
-                                  borderRadius: "0.5rem",
-                                  padding: "0.75rem",
-                                  backgroundColor: "#f8fafc",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    fontWeight: 600,
-                                    marginBottom: "0.5rem",
-                                  }}
-                                >
-                                  Fingerprint {index + 1}
-                                </div>
-                                <code
-                                  style={{
-                                    display: "block",
-                                    whiteSpace: "pre-wrap",
-                                    wordBreak: "break-word",
-                                    marginBottom: "0.5rem",
-                                  }}
-                                >
-                                  {fingerprint}
-                                </code>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    gap: "0.4rem",
-                                  }}
-                                >
-                                  {parseFingerprint(fingerprint).map((part, partIndex) => (
-                                    <span
-                                      key={`cbl-part-${entry.id}-${index}-${partIndex}`}
-                                      style={{
-                                        backgroundColor: "#e2e8f0",
-                                        borderRadius: "999px",
-                                        padding: "0.2rem 0.55rem",
-                                        fontSize: "0.8rem",
-                                      }}
-                                    >
-                                      {part}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
+                        <Button
+                          appearance="subtle"
+                          icon={<DeleteRegular />}
+                          size="small"
+                          onClick={() => handleRequestDeleteMatrixEntry(entry)}
+                        >
+                          Delete
+                        </Button>
                       </div>
 
-                      <div>
-                        <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
-                          Insurer Fingerprints
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                          {entry.insurerFingerprints.length === 0 ? (
-                            <div style={{ color: "#6c757d" }}>
-                              No insurer fingerprints.
-                            </div>
-                          ) : (
-                            entry.insurerFingerprints.map((fingerprint, index) => (
-                              <div
-                                key={`insurer-${entry.id}-${index}`}
-                                style={{
-                                  border: "1px solid #e5e7eb",
-                                  borderRadius: "0.5rem",
-                                  padding: "0.75rem",
-                                  backgroundColor: "#f8fafc",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    fontSize: "0.85rem",
-                                    fontWeight: 600,
-                                    marginBottom: "0.5rem",
-                                  }}
-                                >
-                                  Fingerprint {index + 1}
-                                </div>
-                                <code
-                                  style={{
-                                    display: "block",
-                                    whiteSpace: "pre-wrap",
-                                    wordBreak: "break-word",
-                                    marginBottom: "0.5rem",
-                                  }}
-                                >
-                                  {fingerprint}
-                                </code>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    gap: "0.4rem",
-                                  }}
-                                >
-                                  {parseFingerprint(fingerprint).map((part, partIndex) => (
-                                    <span
-                                      key={`insurer-part-${entry.id}-${index}-${partIndex}`}
-                                      style={{
-                                        backgroundColor: "#e2e8f0",
-                                        borderRadius: "999px",
-                                        padding: "0.2rem 0.55rem",
-                                        fontSize: "0.8rem",
-                                      }}
-                                    >
-                                      {part}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          marginBottom: "0.25rem",
+                        }}
+                      >
+                        CBL ({entry.cblFingerprints.length})
                       </div>
-                    </div>
-                  </Card.Body>
-                </Card>
-              ))}
+                      {cblTable.rows.length === 0 ? (
+                        <div
+                          style={{
+                            color: "#6c757d",
+                            fontSize: "0.8rem",
+                            marginBottom: "0.75rem",
+                          }}
+                        >
+                          No CBL fingerprints.
+                        </div>
+                      ) : (
+                        <Table
+                          columns={cblTable.columns}
+                          dataSource={cblTable.rows}
+                          size="small"
+                          pagination={false}
+                          bordered
+                          style={{ marginBottom: "0.75rem" }}
+                          scroll={{ x: "max-content" }}
+                        />
+                      )}
+
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          marginBottom: "0.25rem",
+                        }}
+                      >
+                        Insurer ({entry.insurerFingerprints.length})
+                      </div>
+                      {insurerTable.rows.length === 0 ? (
+                        <div style={{ color: "#6c757d", fontSize: "0.8rem" }}>
+                          No insurer fingerprints.
+                        </div>
+                      ) : (
+                        <Table
+                          columns={insurerTable.columns}
+                          dataSource={insurerTable.rows}
+                          size="small"
+                          pagination={false}
+                          bordered
+                          scroll={{ x: "max-content" }}
+                        />
+                      )}
+                    </Card.Body>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </Modal.Body>
@@ -744,13 +778,18 @@ const Landing = () => {
         show={isConfirmDeleteOpen}
         onHide={() => !isDeletingMatrixEntry && setIsConfirmDeleteOpen(false)}
         centered
+        style={{ zIndex: 1060 }}
+        backdropClassName="confirm-delete-backdrop"
       >
+        <style>{`.confirm-delete-backdrop { z-index: 1059 !important; }`}</style>
         <Modal.Header closeButton={!isDeletingMatrixEntry}>
-          <Modal.Title>Confirm Delete</Modal.Title>
+          <Modal.Title style={{ fontSize: "1rem", fontWeight: 600 }}>
+            Confirm Delete
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          This will permanently delete the selected matrix history entry and
-          rewrite `history.xlsx`. This action cannot be undone.
+          This will permanently delete the selected matrix history entry. This
+          action cannot be undone.
         </Modal.Body>
         <Modal.Footer>
           <Button
@@ -766,6 +805,81 @@ const Landing = () => {
             disabled={isDeletingMatrixEntry}
           >
             {isDeletingMatrixEntry ? <Spinner size="tiny" /> : "Delete"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal
+        show={isCreateBucketOpen}
+        onHide={() => {
+          if (!isCreatingBucket) {
+            setIsCreateBucketOpen(false);
+            setNewBucketName("");
+          }
+        }}
+        centered
+      >
+        <Modal.Header closeButton={!isCreatingBucket}>
+          <Modal.Title style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+            Create New Bucket
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+          >
+            <div>
+              <label
+                htmlFor="bucket-name-input"
+                style={{
+                  fontWeight: 500,
+                  fontSize: "0.8rem",
+                  marginBottom: "0.25rem",
+                  display: "block",
+                }}
+              >
+                Bucket Name
+              </label>
+              <input
+                id="bucket-name-input"
+                type="text"
+                placeholder="e.g. Mise en D'Meurre"
+                value={newBucketName}
+                onChange={(e) => setNewBucketName(e.target.value)}
+                disabled={isCreatingBucket}
+                style={{
+                  width: "100%",
+                  padding: "6px 10px",
+                  fontSize: "0.8rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "4px",
+                  outline: "none",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "#0078d4")}
+                onBlur={(e) => (e.target.style.borderColor = "#d1d5db")}
+              />
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            appearance="secondary"
+            size="small"
+            onClick={() => {
+              setIsCreateBucketOpen(false);
+              setNewBucketName("");
+            }}
+            disabled={isCreatingBucket}
+          >
+            Cancel
+          </Button>
+          <Button
+            appearance="primary"
+            size="small"
+            onClick={handleCreateBucket}
+            disabled={isCreatingBucket || !newBucketName.trim()}
+          >
+            {isCreatingBucket ? "Saving..." : "Create"}
           </Button>
         </Modal.Footer>
       </Modal>

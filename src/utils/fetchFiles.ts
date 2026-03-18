@@ -94,12 +94,14 @@ export const fetchFile = async (
           .map((bucket) => ({
             BucketName: bucket.BucketName || bucket.BucketKey,
             BucketKey: bucket.BucketKey,
+            SheetName: bucket.SheetName || bucket.BucketKey,
           }))
       : [];
 
     const dynamicBucketData = dynamicBuckets.reduce<Record<string, BucketRows>>(
       (acc, bucket) => {
-        const bucketWorksheet = workbook.Sheets[bucket.BucketKey];
+        const bucketWorksheet =
+          workbook.Sheets[bucket.SheetName || ""] || workbook.Sheets[bucket.BucketKey];
         const bucketJson = bucketWorksheet
           ? XLSX.utils.sheet_to_json(bucketWorksheet, { defval: "" })
           : [];
