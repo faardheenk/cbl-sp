@@ -27,13 +27,15 @@ const createMatchHistoryWorkbook = (entries: MatchHistoryEntry[]) => {
   if (sheetData.length === 0) {
     XLSX.utils.sheet_add_aoa(
       worksheet,
-      [[
-        "CblFingerprints",
-        "InsurerFingerprints",
-        "FromBucket",
-        "TargetBucket",
-        "Timestamp",
-      ]],
+      [
+        [
+          "CblFingerprints",
+          "InsurerFingerprints",
+          "FromBucket",
+          "TargetBucket",
+          "Timestamp",
+        ],
+      ],
       { origin: "A1" },
     );
   }
@@ -91,13 +93,16 @@ const normalizeRowForFingerprint = (
     return row;
   }
 
-  return Object.entries(row).reduce<Record<string, any>>((acc, [key, value]) => {
-    const normalizedKey = key.endsWith("_INSURER")
-      ? key.slice(0, -"_INSURER".length)
-      : key;
-    acc[normalizedKey] = value;
-    return acc;
-  }, {});
+  return Object.entries(row).reduce<Record<string, any>>(
+    (acc, [key, value]) => {
+      const normalizedKey = key.endsWith("_INSURER")
+        ? key.slice(0, -"_INSURER".length)
+        : key;
+      acc[normalizedKey] = value;
+      return acc;
+    },
+    {},
+  );
 };
 
 const formatFingerprintValue = (value: any): string => {
@@ -145,7 +150,9 @@ export const generateFingerprint = (row: Record<string, any>): string => {
 };
 
 export const generateInsurerFingerprint = (row: Record<string, any>): string =>
-  generateFingerprint(normalizeRowForFingerprint(row, { stripInsurerSuffix: true }));
+  generateFingerprint(
+    normalizeRowForFingerprint(row, { stripInsurerSuffix: true }),
+  );
 
 export const getCanonicalCblFingerprint = (row: Record<string, any>): string =>
   String(row["_fingerprint"] ?? "");
@@ -172,7 +179,11 @@ export const saveMatchHistory = async (
   // Read existing history if the file exists
   let existingEntries: MatchHistoryEntry[] = [];
   try {
-    existingEntries = await readMatchHistory(sp, insurerName, serverRelativeUrl);
+    existingEntries = await readMatchHistory(
+      sp,
+      insurerName,
+      serverRelativeUrl,
+    );
   } catch {
     // File doesn't exist yet — that's fine, we'll create it
   }

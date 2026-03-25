@@ -301,7 +301,10 @@ function Reconciliation() {
       getAllBucketKeys().forEach((bucketKey) => {
         const currentRows = getCurrentBucketRows(bucketKey);
         const regeneratedCBL = regenerateIdx(currentRows.cbl, bucketKey);
-        const regeneratedInsurer = regenerateIdx(currentRows.insurer, bucketKey);
+        const regeneratedInsurer = regenerateIdx(
+          currentRows.insurer,
+          bucketKey,
+        );
 
         const finalCBL =
           bucketKey === "partial" && hasPartialToMatchedUndo
@@ -431,14 +434,7 @@ function Reconciliation() {
 
     fetchData();
     fetchColumnMappings();
-  }, [
-    sp,
-    insuranceName,
-    date,
-    url,
-    setDynamicBucketData,
-    setDynamicBuckets,
-  ]);
+  }, [sp, insuranceName, date, url, setDynamicBucketData, setDynamicBuckets]);
 
   useEffect(() => {
     const { sum1, sum2 } = calculateSum(exactMatchCBL, exactMatchInsurer);
@@ -471,11 +467,7 @@ function Reconciliation() {
   const moveRows = useCallback(
     async (
       toSection: BucketKey,
-      actionType:
-        | "moveToExact"
-        | "moveToPartial"
-        | "unmatch"
-        | "moveToBucket",
+      actionType: "moveToExact" | "moveToPartial" | "unmatch" | "moveToBucket",
     ) => {
       if (selectedRowCBL.length === 0 || selectedRowInsurer.length === 0) {
         return;
@@ -877,10 +869,12 @@ function Reconciliation() {
 
       // Record match history for cross-session persistence
       const nonBlankCBL = rowsToMoveCBL.filter(
-        (row) => row.ProcessedAmount !== undefined && row.ProcessedAmount !== "",
+        (row) =>
+          row.ProcessedAmount !== undefined && row.ProcessedAmount !== "",
       );
       const nonBlankInsurer = rowsToMoveInsurer.filter(
-        (row) => row.ProcessedAmount !== undefined && row.ProcessedAmount !== "",
+        (row) =>
+          row.ProcessedAmount !== undefined && row.ProcessedAmount !== "",
       );
 
       if (nonBlankCBL.length > 0 || nonBlankInsurer.length > 0) {
@@ -1867,12 +1861,7 @@ function Reconciliation() {
         );
       }) || null
     );
-  }, [
-    selectedRowCBL,
-    selectedRowInsurer,
-    getAllBucketKeys,
-    getBucketRows,
-  ]);
+  }, [selectedRowCBL, selectedRowInsurer, getAllBucketKeys, getBucketRows]);
 
   const selectedSourceSection = getSelectedSourceSection();
   const headerMoveMenuItems: MenuProps["items"] = getAllBucketKeys().map(

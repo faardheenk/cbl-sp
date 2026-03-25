@@ -380,31 +380,50 @@ const Landing = () => {
       .map((part) => part.trim())
       .filter((part) => part !== "");
 
-  const buildFingerprintTable = (fingerprints: string[]) => {
-    if (fingerprints.length === 0) return { rows: [], columns: [] };
+  const renderFingerprintValues = (fingerprints: string[], emptyLabel: string) => {
+    if (fingerprints.length === 0) {
+      return <div style={{ color: "#6c757d", fontSize: "0.8rem" }}>{emptyLabel}</div>;
+    }
 
-    const parsed = fingerprints.map((fp) => parseFingerprint(fp));
-    const maxCols = Math.max(...parsed.map((parts) => parts.length), 0);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {fingerprints.map((fingerprint, index) => {
+          const parts = parseFingerprint(fingerprint);
 
-    const fpColumns: TableProps<any>["columns"] = Array.from(
-      { length: maxCols },
-      (_, i) => ({
-        title: String(i + 1),
-        dataIndex: `col${i}`,
-        key: `col${i}`,
-        ellipsis: true,
-      }),
+          return (
+            <div
+              key={`${fingerprint}-${index}`}
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: "0.5rem",
+                padding: "0.5rem 0.75rem",
+                backgroundColor: "#f8fafc",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.4rem",
+              }}
+            >
+              {parts.map((part, partIndex) => (
+                <span
+                  key={`${index}-${partIndex}`}
+                  style={{
+                    fontSize: "0.78rem",
+                    lineHeight: 1.4,
+                    padding: "0.2rem 0.45rem",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #dbe2ea",
+                    borderRadius: "999px",
+                    color: "#344054",
+                  }}
+                >
+                  {part}
+                </span>
+              ))}
+            </div>
+          );
+        })}
+      </div>
     );
-
-    const rows = parsed.map((parts, index) => {
-      const row: Record<string, any> = { key: index };
-      parts.forEach((part, i) => {
-        row[`col${i}`] = part;
-      });
-      return row;
-    });
-
-    return { rows, columns: fpColumns };
   };
 
   const loadMatrixHistory = async () => {
@@ -467,9 +486,17 @@ const Landing = () => {
       setEntryPendingDelete(null);
 
       dispatchToast(
-        <Toast>
-          <ToastTitle>Matrix entry deleted</ToastTitle>
-          <ToastBody>
+        <Toast
+          style={{
+            backgroundColor: "#d4edda",
+            color: "#155724",
+            borderRadius: "8px",
+            border: "1px solid #b7dfc6",
+            boxShadow: "0 8px 24px rgba(15, 23, 42, 0.18)",
+          }}
+        >
+          <ToastTitle style={{ color: "#155724" }}>Matrix entry deleted</ToastTitle>
+          <ToastBody style={{ color: "#155724" }}>
             The matrix history entry has been deleted successfully.
           </ToastBody>
         </Toast>,
@@ -478,9 +505,19 @@ const Landing = () => {
     } catch (error) {
       console.error("Failed to delete matrix entry:", error);
       dispatchToast(
-        <Toast>
-          <ToastTitle>Delete failed</ToastTitle>
-          <ToastBody>Could not delete the matrix history entry.</ToastBody>
+        <Toast
+          style={{
+            backgroundColor: "#f8d7da",
+            color: "#721c24",
+            borderRadius: "8px",
+            border: "1px solid #f1b8bf",
+            boxShadow: "0 8px 24px rgba(15, 23, 42, 0.18)",
+          }}
+        >
+          <ToastTitle style={{ color: "#721c24" }}>Delete failed</ToastTitle>
+          <ToastBody style={{ color: "#721c24" }}>
+            Could not delete the matrix history entry.
+          </ToastBody>
         </Toast>,
         { position: "top", intent: "error" },
       );
@@ -499,7 +536,7 @@ const Landing = () => {
       setIsCreatingBucket(true);
       await sp.web.lists.getByTitle("Buckets").items.add({
         Title: bucketKey,
-        InsuranceCompany: currentInsuranceName.toUpperCase().trim(),
+        // InsuranceCompany: currentInsuranceName.toUpperCase().trim(),
         BucketName: trimmedName,
         BucketKey: bucketKey,
       });
@@ -554,6 +591,17 @@ const Landing = () => {
         minHeight: "100vh",
       }}
     >
+      <style>
+        {`
+          .fui-Toaster {
+            z-index: 3000 !important;
+          }
+
+          .fui-Toast {
+            overflow: hidden;
+          }
+        `}
+      </style>
       <Toaster toasterId={toasterId} />
       <Header />
 
@@ -606,13 +654,13 @@ const Landing = () => {
               marginTop: "1rem",
             }}
           >
-            <Button
+            {/* <Button
               appearance="secondary"
               icon={<AddRegular />}
               onClick={() => setIsCreateBucketOpen(true)}
             >
               Create New Bucket
-            </Button>
+            </Button> */}
             <Button
               appearance="primary"
               onClick={loadMatrixHistory}
@@ -668,11 +716,6 @@ const Landing = () => {
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
               {matrixEntries.map((entry) => {
-                const cblTable = buildFingerprintTable(entry.cblFingerprints);
-                const insurerTable = buildFingerprintTable(
-                  entry.insurerFingerprints,
-                );
-
                 return (
                   <Card key={entry.id} style={{ borderRadius: "0.75rem" }}>
                     <Card.Body>
@@ -706,65 +749,69 @@ const Landing = () => {
                           icon={<DeleteRegular />}
                           size="small"
                           onClick={() => handleRequestDeleteMatrixEntry(entry)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-
-                      <div
-                        style={{
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          marginBottom: "0.25rem",
-                        }}
-                      >
-                        CBL ({entry.cblFingerprints.length})
-                      </div>
-                      {cblTable.rows.length === 0 ? (
-                        <div
+                          aria-label="Delete matrix entry"
+                          title="Delete matrix entry"
                           style={{
-                            color: "#6c757d",
-                            fontSize: "0.8rem",
-                            marginBottom: "0.75rem",
+                            minWidth: "32px",
+                            padding: "4px",
+                            color: "#b42318",
+                            transition:
+                              "background-color 0.15s ease, color 0.15s ease",
                           }}
-                        >
-                          No CBL fingerprints.
-                        </div>
-                      ) : (
-                        <Table
-                          columns={cblTable.columns}
-                          dataSource={cblTable.rows}
-                          size="small"
-                          pagination={false}
-                          bordered
-                          style={{ marginBottom: "0.75rem" }}
-                          scroll={{ x: "max-content" }}
+                          onMouseEnter={(event) => {
+                            event.currentTarget.style.backgroundColor =
+                              "#fef3f2";
+                            event.currentTarget.style.color = "#d92d20";
+                          }}
+                          onMouseLeave={(event) => {
+                            event.currentTarget.style.backgroundColor =
+                              "transparent";
+                            event.currentTarget.style.color = "#b42318";
+                          }}
                         />
-                      )}
+                      </div>
 
                       <div
                         style={{
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          marginBottom: "0.25rem",
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "1rem",
                         }}
                       >
-                        Insurer ({entry.insurerFingerprints.length})
-                      </div>
-                      {insurerTable.rows.length === 0 ? (
-                        <div style={{ color: "#6c757d", fontSize: "0.8rem" }}>
-                          No insurer fingerprints.
+                        <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: 600,
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            CBL ({entry.cblFingerprints.length})
+                          </div>
+                          <div style={{ marginBottom: "0.75rem" }}>
+                            {renderFingerprintValues(
+                              entry.cblFingerprints,
+                              "No CBL fingerprints.",
+                            )}
+                          </div>
                         </div>
-                      ) : (
-                        <Table
-                          columns={insurerTable.columns}
-                          dataSource={insurerTable.rows}
-                          size="small"
-                          pagination={false}
-                          bordered
-                          scroll={{ x: "max-content" }}
-                        />
-                      )}
+
+                        <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: 600,
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            Insurer ({entry.insurerFingerprints.length})
+                          </div>
+                          {renderFingerprintValues(
+                            entry.insurerFingerprints,
+                            "No insurer fingerprints.",
+                          )}
+                        </div>
+                      </div>
                     </Card.Body>
                   </Card>
                 );
@@ -804,7 +851,7 @@ const Landing = () => {
             onClick={handleConfirmDeleteMatrixEntry}
             disabled={isDeletingMatrixEntry}
           >
-            {isDeletingMatrixEntry ? <Spinner size="tiny" /> : "Delete"}
+            {isDeletingMatrixEntry ? "Deleting..." : "Delete"}
           </Button>
         </Modal.Footer>
       </Modal>
