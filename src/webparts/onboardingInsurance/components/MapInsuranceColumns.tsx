@@ -470,7 +470,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
 
         <div className={styles["file-dropzones"]}>
           <div className={styles["dropzone"]}>
-            <label>Upload File 1</label>
+            <label>Upload CBL File</label>
             {/* <input
                 ref={file1InputRef}
                 type="file"
@@ -479,11 +479,11 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
               /> */}
 
             <Upload {...file1UploadProps}>
-              <Button>Click to Upload File 1</Button>
+              <Button>Click to Upload CBL File</Button>
             </Upload>
           </div>
           <div className={styles["dropzone"]}>
-            <label>Upload File 2</label>
+            <label>Upload Insurer File</label>
             {/* <input
                 ref={file2InputRef}
                 type="file"
@@ -492,7 +492,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
               /> */}
 
             <Upload {...file2UploadProps}>
-              <Button>Click to Upload File 2</Button>
+              <Button>Click to Upload Insurer File</Button>
             </Upload>
           </div>
         </div>
@@ -501,7 +501,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
         {file1RawData.length > 0 && (
           <div className={styles["input-group"]}>
             <label>
-              File 1 Header Row (Auto-detected: Row {file1HeaderRow + 1})
+              CBL File Header Row (Auto-detected: Row {file1HeaderRow + 1})
             </label>
             <select
               value={file1HeaderRow}
@@ -526,7 +526,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
         {file2RawData.length > 0 && (
           <div className={styles["input-group"]}>
             <label>
-              File 2 Header Row (Auto-detected: Row {file2HeaderRow + 1})
+              Insurer File Header Row (Auto-detected: Row {file2HeaderRow + 1})
             </label>
             <select
               value={file2HeaderRow}
@@ -556,7 +556,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
                 value={selectedFile1Column}
                 onChange={(e) => setSelectedFile1Column(e.target.value)}
               >
-                <option value="">Select column from File 1</option>
+                <option value="">Select column from CBL File</option>
                 {file1Columns.map((col, idx) => (
                   <option key={idx} value={col}>
                     {col}
@@ -568,7 +568,7 @@ export default function MapInsuranceColumns({ isSaving, setIsSaving }: Props) {
                 value={selectedFile2Column}
                 onChange={(e) => setSelectedFile2Column(e.target.value)}
               >
-                <option value="">Select column from File 2</option>
+                <option value="">Select column from Insurer File</option>
                 {file2Columns.map((col, idx) => (
                   <option key={idx} value={col}>
                     {col}

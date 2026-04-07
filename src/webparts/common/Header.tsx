@@ -42,7 +42,8 @@ const Header: React.FC = () => {
   const pageName = pathParts[pathParts.length - 1].split(".")[0]; // Gets "Reconciliation"
   // console.log("Page name:", pageName);
 
-  const isSubsite = pageName === "Reconciliation" ? true : false;
+  const isReconciliation = pageName === "Reconciliation";
+  const isOnboarding = pageName === "Onboarding%20Insurance" || pageName === "Onboarding Insurance";
 
   const insuranceOptions = ["Swan", "MUA", "Sicom", "Eagle Insurance"];
 
@@ -114,8 +115,29 @@ const Header: React.FC = () => {
           </a>
         </Col>
         <Col className="text-end">
-          {isSubsite ? (
-            <div className="d-flex gap-2 justify-content-end">
+          <div className="d-flex gap-2 justify-content-end">
+            {isReconciliation && (
+              <>
+                <Button
+                  as="a"
+                  href={context.pageContext.web.absoluteUrl}
+                  appearance="primary"
+                  className={styles.actionButton}
+                  icon={<HomeRegular />}
+                >
+                  Back to Dashboard
+                </Button>
+                <Button
+                  onClick={handleExportReport}
+                  appearance="primary"
+                  className={styles.actionButton}
+                  icon={<ArrowDownloadRegular />}
+                >
+                  Export Report
+                </Button>
+              </>
+            )}
+            {isOnboarding && (
               <Button
                 as="a"
                 href={context.pageContext.web.absoluteUrl}
@@ -123,42 +145,35 @@ const Header: React.FC = () => {
                 className={styles.actionButton}
                 icon={<HomeRegular />}
               >
-                Back to Dashboard
+                Go to Dashboard
               </Button>
-              <Button
-                onClick={handleExportReport}
-                appearance="primary"
-                className={styles.actionButton}
-                icon={<ArrowDownloadRegular />}
-              >
-                Export Report
-              </Button>
-            </div>
-          ) : (
-            <div className="d-flex gap-2 justify-content-end">
-              <Button
-                appearance="primary"
-                className={styles.actionButton}
-                icon={<AddRegular />}
-                onClick={() => {
-                  window.open(
-                    `${context.pageContext.web.absoluteUrl}/SitePages/Onboarding Insurance.aspx`,
-                    "_blank",
-                  );
-                }}
-              >
-                Onboard New Insurance
-              </Button>
-              <Button
-                onClick={handleOpen}
-                appearance="primary"
-                className={styles.actionButton}
-                icon={<ArrowUploadRegular />}
-              >
-                Upload Statements
-              </Button>
-            </div>
-          )}
+            )}
+            {!isReconciliation && !isOnboarding && (
+              <>
+                <Button
+                  appearance="primary"
+                  className={styles.actionButton}
+                  icon={<AddRegular />}
+                  onClick={() => {
+                    window.open(
+                      `${context.pageContext.web.absoluteUrl}/SitePages/Onboarding Insurance.aspx`,
+                      "_blank",
+                    );
+                  }}
+                >
+                  Onboard New Insurance
+                </Button>
+                <Button
+                  onClick={handleOpen}
+                  appearance="primary"
+                  className={styles.actionButton}
+                  icon={<ArrowUploadRegular />}
+                >
+                  Upload Statements
+                </Button>
+              </>
+            )}
+          </div>
         </Col>
       </Row>
 
