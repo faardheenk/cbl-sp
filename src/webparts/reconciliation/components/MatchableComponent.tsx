@@ -26,6 +26,7 @@ type MatchableComponentProps = {
   onUnmatch?: () => void;
   onMoveToExactMatch?: () => void;
   onMoveToPartialMatch?: () => void;
+  onAddRemarks?: () => void;
 };
 
 function MatchableComponent({
@@ -42,6 +43,7 @@ function MatchableComponent({
   onUnmatch,
   onMoveToExactMatch,
   onMoveToPartialMatch,
+  onAddRemarks,
 }: MatchableComponentProps) {
   const {
     exactMatchCBL,
@@ -356,6 +358,7 @@ function MatchableComponent({
                   onUnmatch={onUnmatch}
                   onMoveToExactMatch={onMoveToExactMatch}
                   onMoveToPartialMatch={onMoveToPartialMatch}
+                  onAddRemarks={onAddRemarks}
                   actionMenuItems={actionMenuItems}
                   syncScrollEnabled={syncScrollEnabled}
                   onSyncScrollChange={setSyncScrollEnabled}
@@ -419,6 +422,7 @@ function MatchableComponent({
                   onUnmatch={onUnmatch}
                   onMoveToExactMatch={onMoveToExactMatch}
                   onMoveToPartialMatch={onMoveToPartialMatch}
+                  onAddRemarks={onAddRemarks}
                   actionMenuItems={actionMenuItems}
                   syncScrollEnabled={syncScrollEnabled}
                   onScroll={handleInsurerScroll}

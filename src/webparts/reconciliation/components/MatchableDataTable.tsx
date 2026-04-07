@@ -221,6 +221,7 @@ type Props = {
   onMoveToExactMatch?: () => void;
   onMoveToPartialMatch?: () => void;
   actionMenuItems?: MenuProps["items"];
+  onAddRemarks?: () => void;
   // Scroll synchronization props
   syncScrollEnabled?: boolean;
   onSyncScrollChange?: (enabled: boolean) => void;
@@ -328,6 +329,7 @@ function MatchableDataTable({
   onMoveToExactMatch,
   onMoveToPartialMatch,
   actionMenuItems,
+  onAddRemarks,
   syncScrollEnabled = false,
   onSyncScrollChange,
   onScroll,
@@ -707,6 +709,16 @@ function MatchableDataTable({
       });
     }
 
+    items.push({ type: "divider" as const });
+    items.push({
+      key: "addRemarks",
+      label: "Add Remarks",
+      onClick: (e) => {
+        e.domEvent.stopPropagation();
+        onAddRemarks?.();
+      },
+    });
+
     return items;
   }, [
     actionMenuItems,
@@ -714,6 +726,7 @@ function MatchableDataTable({
     onUnmatch,
     onMoveToExactMatch,
     onMoveToPartialMatch,
+    onAddRemarks,
   ]);
 
   // Action column for selected rows
@@ -726,6 +739,9 @@ function MatchableDataTable({
       width: 40,
       fixed: "left" as const,
       className: "action-column",
+      onCell: () => ({
+        onClick: (e: React.MouseEvent) => e.stopPropagation(),
+      }),
       render: (_: any, record: any) => {
         const isSelected = selectedRows.includes(record.idx);
         if (!isSelected) return null;

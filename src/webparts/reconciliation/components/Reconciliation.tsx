@@ -17,6 +17,7 @@ import {
 import SummaryTable from "./SummaryTable";
 import MatchableComponent from "./MatchableComponent";
 import SaveChanges from "./SaveChanges";
+import RemarksModal from "./RemarksModal";
 import {
   addGroupAndCondition,
   calculateSum,
@@ -83,6 +84,15 @@ function Reconciliation() {
     removeFromHistory,
     addMatchHistoryEntry,
   } = useReconciliation();
+
+  // Remarks modal state
+  const [showRemarksModal, setShowRemarksModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    toSection: BucketKey;
+    actionType: "moveToExact" | "moveToPartial" | "unmatch" | "moveToBucket";
+  } | null>(null);
+  const [remarksMode, setRemarksMode] = useState<"move" | "standalone">("move");
+  const [currentRemarks, setCurrentRemarks] = useState("");
 
   const urlParams = new URLSearchParams(window.location.search);
   const insuranceName = urlParams.get("Insurance");
@@ -468,6 +478,7 @@ function Reconciliation() {
     async (
       toSection: BucketKey,
       actionType: "moveToExact" | "moveToPartial" | "unmatch" | "moveToBucket",
+      remarks?: string,
     ) => {
       if (selectedRowCBL.length === 0 || selectedRowInsurer.length === 0) {
         return;
@@ -855,6 +866,18 @@ function Reconciliation() {
         });
       }
 
+      // Apply remarks to rows before recording history
+      if (remarks?.trim()) {
+        rowsToMoveCBL = rowsToMoveCBL.map((row) => ({
+          ...row,
+          Remarks: remarks,
+        }));
+        rowsToMoveInsurer = rowsToMoveInsurer.map((row) => ({
+          ...row,
+          Remarks: remarks,
+        }));
+      }
+
       // Add to history (use full rowsToMove snapshot, including blank rows)
       addToHistory({
         actionType,
@@ -878,13 +901,26 @@ function Reconciliation() {
       );
 
       if (nonBlankCBL.length > 0 || nonBlankInsurer.length > 0) {
+        const cblFingerprintsWithRows = nonBlankCBL.filter((row) =>
+          getCanonicalCblFingerprint(row),
+        );
+        const insurerFingerprintsWithRows = nonBlankInsurer.filter((row) =>
+          getCanonicalInsurerFingerprint(row),
+        );
+
         const historyEntry: MatchHistoryEntry = {
-          cblFingerprints: nonBlankCBL
-            .map((row) => getCanonicalCblFingerprint(row))
-            .filter(Boolean),
-          insurerFingerprints: nonBlankInsurer
-            .map((row) => getCanonicalInsurerFingerprint(row))
-            .filter(Boolean),
+          cblFingerprints: cblFingerprintsWithRows.map((row) =>
+            getCanonicalCblFingerprint(row),
+          ),
+          insurerFingerprints: insurerFingerprintsWithRows.map((row) =>
+            getCanonicalInsurerFingerprint(row),
+          ),
+          cblRemarks: cblFingerprintsWithRows.map(
+            (row) => row.Remarks || "",
+          ),
+          insurerRemarks: insurerFingerprintsWithRows.map(
+            (row) => row.Remarks || "",
+          ),
           targetBucket: toSection,
           fromBucket: fromSection,
           timestamp: new Date().toISOString(),
@@ -1179,12 +1215,20 @@ function Reconciliation() {
           destination.insurer,
         );
 
+        // Apply remarks to partial-to-matched rows
+        const remarkedCBLRows = remarks?.trim()
+          ? exactMatchCBLRows.map((row) => ({ ...row, Remarks: remarks }))
+          : exactMatchCBLRows;
+        const remarkedInsurerRows = remarks?.trim()
+          ? exactMatchInsurerRows.map((row) => ({ ...row, Remarks: remarks }))
+          : exactMatchInsurerRows;
+
         const exactMatchRowsWithGroupCBL = addGroupAndCondition(
-          exactMatchCBLRows,
+          remarkedCBLRows,
           nextMatchGroup,
         );
         const exactMatchRowsWithGroupInsurer = addGroupAndCondition(
-          exactMatchInsurerRows,
+          remarkedInsurerRows,
           nextMatchGroup,
         );
 
@@ -1339,12 +1383,22 @@ function Reconciliation() {
     ],
   );
 
-  const handleMoveToPartialMatch = async () => {
-    await moveRows("partial", "moveToPartial");
+  const handleMoveToPartialMatch = () => {
+    setPendingAction({ toSection: "partial", actionType: "moveToPartial" });
+    setRemarksMode("move");
+    setCurrentRemarks(
+      selectedRowCBL[0]?.Remarks || selectedRowInsurer[0]?.Remarks || "",
+    );
+    setShowRemarksModal(true);
   };
 
-  const handleUnmatch = async () => {
-    await moveRows("no-match", "unmatch");
+  const handleUnmatch = () => {
+    setPendingAction({ toSection: "no-match", actionType: "unmatch" });
+    setRemarksMode("move");
+    setCurrentRemarks(
+      selectedRowCBL[0]?.Remarks || selectedRowInsurer[0]?.Remarks || "",
+    );
+    setShowRemarksModal(true);
   };
 
   // Legacy code below - keeping for reference but should be removed
@@ -1753,12 +1807,17 @@ function Reconciliation() {
     }
   };
 
-  const handleMoveToExactMatch = async () => {
-    await moveRows("exact", "moveToExact");
+  const handleMoveToExactMatch = () => {
+    setPendingAction({ toSection: "exact", actionType: "moveToExact" });
+    setRemarksMode("move");
+    setCurrentRemarks(
+      selectedRowCBL[0]?.Remarks || selectedRowInsurer[0]?.Remarks || "",
+    );
+    setShowRemarksModal(true);
   };
 
   const handleMoveToBucket = useCallback(
-    async (bucketKey: BucketKey) => {
+    (bucketKey: BucketKey) => {
       const actionType =
         bucketKey === "exact"
           ? "moveToExact"
@@ -1768,10 +1827,109 @@ function Reconciliation() {
               ? "unmatch"
               : "moveToBucket";
 
-      await moveRows(bucketKey, actionType);
+      setPendingAction({ toSection: bucketKey, actionType });
+      setRemarksMode("move");
+      setCurrentRemarks(
+        selectedRowCBL[0]?.Remarks || selectedRowInsurer[0]?.Remarks || "",
+      );
+      setShowRemarksModal(true);
     },
-    [moveRows],
+    [selectedRowCBL, selectedRowInsurer],
   );
+
+  // Apply remarks to selected rows in-place (for standalone "Add Remarks" action)
+  const applyRemarksToSelectedRows = useCallback(
+    (remarks: string) => {
+      if (!remarks.trim()) return;
+
+      const sourceSection = getAllBucketKeys().find((bucketKey) =>
+        getBucketRows(bucketKey).cbl.some((row) =>
+          selectedRowCBL.some((selected) => selected.idx === row.idx),
+        ),
+      );
+
+      if (!sourceSection) return;
+
+      const source = getBucketRows(sourceSection);
+      const selectedCblIdxs = new Set(selectedRowCBL.map((r) => r.idx));
+      const selectedInsurerIdxs = new Set(
+        selectedRowInsurer.map((r) => r.idx),
+      );
+
+      if (selectedRowCBL.length > 0) {
+        const updatedCBL = source.cbl.map((row) =>
+          selectedCblIdxs.has(row.idx)
+            ? { ...row, Remarks: remarks }
+            : row,
+        );
+        setBucketRows(sourceSection, "cbl", updatedCBL);
+      }
+
+      if (selectedRowInsurer.length > 0) {
+        const updatedInsurer = source.insurer.map((row) =>
+          selectedInsurerIdxs.has(row.idx)
+            ? { ...row, Remarks: remarks }
+            : row,
+        );
+        setBucketRows(sourceSection, "insurer", updatedInsurer);
+      }
+    },
+    [
+      selectedRowCBL,
+      selectedRowInsurer,
+      getAllBucketKeys,
+      getBucketRows,
+      setBucketRows,
+    ],
+  );
+
+  // Remarks modal callbacks
+  const handleRemarksSubmit = useCallback(
+    async (remarks: string) => {
+      setShowRemarksModal(false);
+
+      if (remarksMode === "move" && pendingAction) {
+        await moveRows(
+          pendingAction.toSection,
+          pendingAction.actionType,
+          remarks,
+        );
+        setPendingAction(null);
+      } else if (remarksMode === "standalone") {
+        applyRemarksToSelectedRows(remarks);
+        setChanges(true);
+      }
+
+      setCurrentRemarks("");
+    },
+    [remarksMode, pendingAction, moveRows, applyRemarksToSelectedRows, setChanges],
+  );
+
+  const handleRemarksSkip = useCallback(async () => {
+    setShowRemarksModal(false);
+
+    if (pendingAction) {
+      await moveRows(pendingAction.toSection, pendingAction.actionType);
+      setPendingAction(null);
+    }
+
+    setCurrentRemarks("");
+  }, [pendingAction, moveRows]);
+
+  const handleRemarksCancel = useCallback(() => {
+    setShowRemarksModal(false);
+    setPendingAction(null);
+    setCurrentRemarks("");
+  }, []);
+
+  const handleAddRemarks = useCallback(() => {
+    if (selectedRowCBL.length === 0 && selectedRowInsurer.length === 0) return;
+    setRemarksMode("standalone");
+    setCurrentRemarks(
+      selectedRowCBL[0]?.Remarks || selectedRowInsurer[0]?.Remarks || "",
+    );
+    setShowRemarksModal(true);
+  }, [selectedRowCBL, selectedRowInsurer]);
 
   const getActionMenuItemsForSection = useCallback(
     (sectionKey: BucketKey): MenuProps["items"] => {
@@ -1819,9 +1977,19 @@ function Reconciliation() {
         });
       }
 
+      // Add divider and "Add Remarks" option to all sections
+      items.push({ type: "divider" as const });
+      items.push({
+        key: "addRemarks",
+        label: "Add Remarks",
+        onClick: () => {
+          handleAddRemarks();
+        },
+      });
+
       return items;
     },
-    [dynamicBuckets, handleMoveToBucket],
+    [dynamicBuckets, handleMoveToBucket, handleAddRemarks],
   );
 
   const getBucketLabel = useCallback(
@@ -2090,6 +2258,7 @@ function Reconciliation() {
           clearSelections={clearAllSelections}
           loading={isLoading}
           onUnmatch={handleUnmatch}
+          onAddRemarks={handleAddRemarks}
           actionMenuItems={getActionMenuItemsForSection("exact")}
         />
 
@@ -2102,6 +2271,7 @@ function Reconciliation() {
           loading={isLoading}
           onUnmatch={handleUnmatch}
           onMoveToExactMatch={handleMoveToExactMatch}
+          onAddRemarks={handleAddRemarks}
           actionMenuItems={getActionMenuItemsForSection("partial")}
         />
 
@@ -2114,6 +2284,7 @@ function Reconciliation() {
           loading={isLoading}
           onMoveToExactMatch={handleMoveToExactMatch}
           onMoveToPartialMatch={handleMoveToPartialMatch}
+          onAddRemarks={handleAddRemarks}
           actionMenuItems={getActionMenuItemsForSection("no-match")}
         />
 
@@ -2157,11 +2328,24 @@ function Reconciliation() {
                   },
                 }));
               }}
+              onAddRemarks={handleAddRemarks}
               actionMenuItems={getActionMenuItemsForSection(bucket.BucketKey)}
             />
           );
         })}
       </div>
+
+      <RemarksModal
+        show={showRemarksModal}
+        onClose={handleRemarksCancel}
+        onSubmit={handleRemarksSubmit}
+        onSkip={remarksMode === "move" ? handleRemarksSkip : undefined}
+        initialRemarks={currentRemarks}
+        title={
+          remarksMode === "move" ? "Add Remarks Before Moving" : "Add Remarks"
+        }
+        showSkipButton={remarksMode === "move"}
+      />
     </>
   );
 }

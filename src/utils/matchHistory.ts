@@ -5,6 +5,8 @@ import { BucketKey } from "./reconciliationBuckets";
 export interface MatchHistoryEntry {
   cblFingerprints: string[];
   insurerFingerprints: string[];
+  cblRemarks?: string[];
+  insurerRemarks?: string[];
   targetBucket: BucketKey;
   fromBucket: BucketKey;
   timestamp: string;
@@ -14,6 +16,8 @@ const serializeMatchHistoryEntries = (entries: MatchHistoryEntry[]) =>
   entries.map((entry) => ({
     CblFingerprints: JSON.stringify(entry.cblFingerprints),
     InsurerFingerprints: JSON.stringify(entry.insurerFingerprints),
+    CblRemarks: JSON.stringify(entry.cblRemarks || []),
+    InsurerRemarks: JSON.stringify(entry.insurerRemarks || []),
     FromBucket: entry.fromBucket,
     TargetBucket: entry.targetBucket,
     Timestamp: entry.timestamp,
@@ -31,6 +35,8 @@ const createMatchHistoryWorkbook = (entries: MatchHistoryEntry[]) => {
         [
           "CblFingerprints",
           "InsurerFingerprints",
+          "CblRemarks",
+          "InsurerRemarks",
           "FromBucket",
           "TargetBucket",
           "Timestamp",
@@ -76,6 +82,10 @@ const FINGERPRINT_EXCLUDE_COLUMNS = new Set([
 
   // Output-only columns
   "MatrixKey",
+
+  // User annotation columns
+  "Remarks",
+  "Remarks_INSURER",
 
   // Frontend-only columns
   "idx",
@@ -273,6 +283,8 @@ export const readMatchHistory = async (
     return rows.map((row: any) => ({
       cblFingerprints: JSON.parse(row.CblFingerprints || "[]"),
       insurerFingerprints: JSON.parse(row.InsurerFingerprints || "[]"),
+      cblRemarks: JSON.parse(row.CblRemarks || "[]"),
+      insurerRemarks: JSON.parse(row.InsurerRemarks || "[]"),
       fromBucket: row.FromBucket as BucketKey,
       targetBucket: row.TargetBucket as BucketKey,
       timestamp: row.Timestamp,
