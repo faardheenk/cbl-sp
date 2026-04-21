@@ -915,9 +915,7 @@ function Reconciliation() {
           insurerFingerprints: insurerFingerprintsWithRows.map((row) =>
             getCanonicalInsurerFingerprint(row),
           ),
-          cblRemarks: cblFingerprintsWithRows.map(
-            (row) => row.Remarks || "",
-          ),
+          cblRemarks: cblFingerprintsWithRows.map((row) => row.Remarks || ""),
           insurerRemarks: insurerFingerprintsWithRows.map(
             (row) => row.Remarks || "",
           ),
@@ -1852,24 +1850,18 @@ function Reconciliation() {
 
       const source = getBucketRows(sourceSection);
       const selectedCblIdxs = new Set(selectedRowCBL.map((r) => r.idx));
-      const selectedInsurerIdxs = new Set(
-        selectedRowInsurer.map((r) => r.idx),
-      );
+      const selectedInsurerIdxs = new Set(selectedRowInsurer.map((r) => r.idx));
 
       if (selectedRowCBL.length > 0) {
         const updatedCBL = source.cbl.map((row) =>
-          selectedCblIdxs.has(row.idx)
-            ? { ...row, Remarks: remarks }
-            : row,
+          selectedCblIdxs.has(row.idx) ? { ...row, Remarks: remarks } : row,
         );
         setBucketRows(sourceSection, "cbl", updatedCBL);
       }
 
       if (selectedRowInsurer.length > 0) {
         const updatedInsurer = source.insurer.map((row) =>
-          selectedInsurerIdxs.has(row.idx)
-            ? { ...row, Remarks: remarks }
-            : row,
+          selectedInsurerIdxs.has(row.idx) ? { ...row, Remarks: remarks } : row,
         );
         setBucketRows(sourceSection, "insurer", updatedInsurer);
       }
@@ -1902,7 +1894,13 @@ function Reconciliation() {
 
       setCurrentRemarks("");
     },
-    [remarksMode, pendingAction, moveRows, applyRemarksToSelectedRows, setChanges],
+    [
+      remarksMode,
+      pendingAction,
+      moveRows,
+      applyRemarksToSelectedRows,
+      setChanges,
+    ],
   );
 
   const handleRemarksSkip = useCallback(async () => {
@@ -1970,7 +1968,7 @@ function Reconciliation() {
       if (sectionKey !== "no-match") {
         items.push({
           key: "unmatch",
-          label: "Unmatch",
+          label: "Move to No Match",
           onClick: () => {
             void handleMoveToBucket("no-match");
           },

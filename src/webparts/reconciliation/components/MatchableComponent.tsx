@@ -428,7 +428,6 @@ function MatchableComponent({
                   onScroll={handleInsurerScroll}
                   externalScrollTop={cblScrollTop}
                   onSelectedSubtotalChange={setInsurerSelectedSubtotal}
-                  otherSectionSubtotal={cblSelectedSubtotal}
                 />
               </div>
             </div>

@@ -227,7 +227,7 @@ type Props = {
   onSyncScrollChange?: (enabled: boolean) => void;
   onScroll?: (scrollTop: number) => void;
   externalScrollTop?: number;
-  // Cross-table selected subtotal (for difference display)
+  // Cross-table selected subtotal (CBL shows Difference = this + other)
   onSelectedSubtotalChange?: (subtotal: number) => void;
   otherSectionSubtotal?: number;
 };
@@ -677,7 +677,7 @@ function MatchableDataTable({
       // Can unmatch from exact or partial
       items.push({
         key: "unmatch",
-        label: "Unmatch",
+        label: "Move to No Match",
         onClick: (e) => {
           e.domEvent.stopPropagation();
           onUnmatch?.();
@@ -797,7 +797,7 @@ function MatchableDataTable({
     }, 0);
   }, [selectedRows, data]);
 
-  // Notify parent of selected subtotal for cross-table difference
+  // Notify parent of selected subtotal for cross-table sum (Difference on CBL)
   useEffect(() => {
     onSelectedSubtotalChange?.(selectedRowsSubtotal);
   }, [selectedRowsSubtotal, onSelectedSubtotalChange]);
@@ -1270,35 +1270,34 @@ function MatchableDataTable({
                 </span>
               </Tooltip>
               {otherSectionSubtotal !== undefined && (
-                <Tooltip title="This section's selected subtotal minus the other section's selected subtotal">
+                <Tooltip title="Sum of this section's selected subtotal and the other section's selected subtotal">
                   <span
                     style={{
                       fontSize: "13px",
                       fontWeight: "600",
                       color:
-                        selectedRowsSubtotal - otherSectionSubtotal >= 0
+                        selectedRowsSubtotal + otherSectionSubtotal >= 0
                           ? "#389e0d"
                           : "#cf1322",
                       padding: "4px 12px",
                       backgroundColor:
-                        selectedRowsSubtotal - otherSectionSubtotal >= 0
+                        selectedRowsSubtotal + otherSectionSubtotal >= 0
                           ? "#f6ffed"
                           : "#fff2f0",
                       borderRadius: "4px",
                       border:
-                        selectedRowsSubtotal - otherSectionSubtotal >= 0
+                        selectedRowsSubtotal + otherSectionSubtotal >= 0
                           ? "1px solid #b7eb8f"
                           : "1px solid #ffccc7",
                     }}
                   >
                     Difference: Rs{" "}
-                    {(selectedRowsSubtotal - otherSectionSubtotal).toLocaleString(
-                      "en-US",
-                      {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      },
-                    )}
+                    {(
+                      selectedRowsSubtotal + otherSectionSubtotal
+                    ).toLocaleString("en-US", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </span>
                 </Tooltip>
               )}
