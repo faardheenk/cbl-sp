@@ -27,6 +27,13 @@ type MatchableComponentProps = {
   onMoveToExactMatch?: () => void;
   onMoveToPartialMatch?: () => void;
   onAddRemarks?: () => void;
+  // Regroup props
+  regroupTargetIdxs?: string[];
+  regroupTargetBucket?: string | null;
+  regroupTargetBucketLabel?: string;
+  onSetRegroupTarget?: (row: any, bucket: BucketKey, side: "cbl" | "insurer") => void;
+  onClearRegroupTarget?: () => void;
+  onRegroupToTarget?: () => void;
 };
 
 function MatchableComponent({
@@ -44,6 +51,12 @@ function MatchableComponent({
   onMoveToExactMatch,
   onMoveToPartialMatch,
   onAddRemarks,
+  regroupTargetIdxs,
+  regroupTargetBucket,
+  regroupTargetBucketLabel,
+  onSetRegroupTarget,
+  onClearRegroupTarget,
+  onRegroupToTarget,
 }: MatchableComponentProps) {
   const {
     exactMatchCBL,
@@ -169,6 +182,9 @@ function MatchableComponent({
   // Shared current page state for cross-table pagination
   const [sharedCurrentPage, setSharedCurrentPage] = useState<number>(1);
 
+  // Auto-select toggle: when enabled, clicking a CBL row auto-selects matching insurer rows
+  const [autoSelectEnabled, setAutoSelectEnabled] = useState<boolean>(false);
+
   // Scroll synchronization state
   const [syncScrollEnabled, setSyncScrollEnabled] = useState<boolean>(false);
   const [cblScrollTop, setCblScrollTop] = useState<number>(0);
@@ -183,6 +199,16 @@ function MatchableComponent({
       setManuallyDeselectedRows(new Set());
     }
   }, [clearSelections, clearAllSelections]);
+
+  // Clear auto-selected insurer rows when auto-select is toggled off
+  const handleAutoSelectChange = (enabled: boolean) => {
+    setAutoSelectEnabled(enabled);
+    if (!enabled) {
+      setAutoSelectedInsurerRows([]);
+      setCblSelectionMappings(new Map());
+      setManuallyDeselectedRows(new Set());
+    }
+  };
 
   // Handler for automatic row selection
   const handleRowSelection = (
@@ -366,6 +392,14 @@ function MatchableComponent({
                   externalScrollTop={insurerScrollTop}
                   onSelectedSubtotalChange={setCblSelectedSubtotal}
                   otherSectionSubtotal={insurerSelectedSubtotal}
+                  autoSelectEnabled={autoSelectEnabled}
+                  onAutoSelectChange={handleAutoSelectChange}
+                  regroupTargetIdxs={regroupTargetIdxs}
+                  onSetRegroupTarget={(row) => onSetRegroupTarget?.(row, type, "cbl")}
+                  onClearRegroupTarget={onClearRegroupTarget}
+                  onRegroupToTarget={onRegroupToTarget}
+                  regroupTargetBucketLabel={regroupTargetBucketLabel}
+                  isRegroupTargetInThisBucket={regroupTargetBucket === type}
                 />
               </div>
             </div>
@@ -428,6 +462,12 @@ function MatchableComponent({
                   onScroll={handleInsurerScroll}
                   externalScrollTop={cblScrollTop}
                   onSelectedSubtotalChange={setInsurerSelectedSubtotal}
+                  regroupTargetIdxs={regroupTargetIdxs}
+                  onSetRegroupTarget={(row) => onSetRegroupTarget?.(row, type, "insurer")}
+                  onClearRegroupTarget={onClearRegroupTarget}
+                  onRegroupToTarget={onRegroupToTarget}
+                  regroupTargetBucketLabel={regroupTargetBucketLabel}
+                  isRegroupTargetInThisBucket={regroupTargetBucket === type}
                 />
               </div>
             </div>

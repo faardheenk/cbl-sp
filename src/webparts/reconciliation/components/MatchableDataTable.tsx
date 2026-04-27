@@ -17,6 +17,7 @@ import {
   MoreOutlined,
   CloseOutlined,
   LinkOutlined,
+  AimOutlined,
 } from "@ant-design/icons";
 import "react-resizable/css/styles.css";
 import { BucketKey } from "../../../utils/reconciliationBuckets";
@@ -123,6 +124,16 @@ const resizableStyles = `
     cursor: pointer !important;
   }
   
+  /* Regroup target row styling */
+  .consistent-height-table .ant-table-tbody > tr.regroup-target-row > td {
+    background-color: rgba(250, 173, 20, 0.12) !important;
+    border-left: 3px solid rgba(250, 173, 20, 0.8) !important;
+  }
+
+  .consistent-height-table .ant-table-tbody > tr.regroup-target-row:hover > td {
+    background-color: rgba(250, 173, 20, 0.2) !important;
+  }
+
   /* Empty row styling */
   .consistent-height-table .ant-table-tbody > tr.empty-row > td {
     background-color: #f5f5f5 !important;
@@ -230,6 +241,16 @@ type Props = {
   // Cross-table selected subtotal (CBL shows Difference = this + other)
   onSelectedSubtotalChange?: (subtotal: number) => void;
   otherSectionSubtotal?: number;
+  // Auto-select toggle: when enabled, clicking a CBL row auto-selects matching insurer rows
+  autoSelectEnabled?: boolean;
+  onAutoSelectChange?: (enabled: boolean) => void;
+  // Regroup target props
+  regroupTargetIdxs?: string[];
+  onSetRegroupTarget?: (row: any) => void;
+  onClearRegroupTarget?: () => void;
+  onRegroupToTarget?: () => void;
+  regroupTargetBucketLabel?: string;
+  isRegroupTargetInThisBucket?: boolean;
 };
 
 // Resizable title component with hide button
@@ -336,6 +357,14 @@ function MatchableDataTable({
   externalScrollTop,
   onSelectedSubtotalChange,
   otherSectionSubtotal,
+  autoSelectEnabled = false,
+  onAutoSelectChange,
+  regroupTargetIdxs = [],
+  onSetRegroupTarget,
+  onClearRegroupTarget,
+  onRegroupToTarget,
+  regroupTargetBucketLabel,
+  isRegroupTargetInThisBucket = false,
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [previousDataLength, setPreviousDataLength] = useState<number>(
@@ -729,6 +758,70 @@ function MatchableDataTable({
     onAddRemarks,
   ]);
 
+  // Build per-row regroup menu items
+  const buildRegroupMenuItems = useCallback(
+    (record: any): MenuProps["items"] => {
+      const items: MenuProps["items"] = [];
+      const isEmptyRow = record.ProcessedAmount === "";
+      if (isEmptyRow) return items;
+
+      items.push({ type: "divider" as const });
+
+      const isThisTheTarget = regroupTargetIdxs.includes(record.idx) && isRegroupTargetInThisBucket;
+
+      if (isThisTheTarget) {
+        items.push({
+          key: "clearRegroupTarget",
+          label: "Clear Regroup Target",
+          icon: <CloseOutlined />,
+          onClick: (e) => {
+            e.domEvent.stopPropagation();
+            onClearRegroupTarget?.();
+          },
+        });
+      } else if (regroupTargetIdxs.length > 0 && !isRegroupTargetInThisBucket) {
+        items.push({
+          key: "regroupToTarget",
+          label: `Group to ${regroupTargetBucketLabel || "Target"}`,
+          icon: <AimOutlined />,
+          onClick: (e) => {
+            e.domEvent.stopPropagation();
+            onRegroupToTarget?.();
+          },
+        });
+        items.push({
+          key: "setRegroupTarget",
+          label: "Set as Regroup Target",
+          icon: <AimOutlined style={{ color: "#faad14" }} />,
+          onClick: (e) => {
+            e.domEvent.stopPropagation();
+            onSetRegroupTarget?.(record);
+          },
+        });
+      } else {
+        items.push({
+          key: "setRegroupTarget",
+          label: "Set as Regroup Target",
+          icon: <AimOutlined style={{ color: "#faad14" }} />,
+          onClick: (e) => {
+            e.domEvent.stopPropagation();
+            onSetRegroupTarget?.(record);
+          },
+        });
+      }
+
+      return items;
+    },
+    [
+      regroupTargetIdxs,
+      isRegroupTargetInThisBucket,
+      regroupTargetBucketLabel,
+      onSetRegroupTarget,
+      onClearRegroupTarget,
+      onRegroupToTarget,
+    ],
+  );
+
   // Action column for selected rows
   const actionColumn = useMemo(() => {
     if (!sectionType) return null;
@@ -746,8 +839,10 @@ function MatchableDataTable({
         const isSelected = selectedRows.includes(record.idx);
         if (!isSelected) return null;
 
-        const menuItems = getActionMenuItems();
-        if (!menuItems || menuItems.length === 0) return null;
+        const baseMenuItems = getActionMenuItems() || [];
+        const regroupItems = buildRegroupMenuItems(record) || [];
+        const menuItems = [...baseMenuItems, ...regroupItems];
+        if (menuItems.length === 0) return null;
 
         return (
           <Dropdown
@@ -765,7 +860,7 @@ function MatchableDataTable({
         );
       },
     };
-  }, [sectionType, selectedRows, getActionMenuItems]);
+  }, [sectionType, selectedRows, getActionMenuItems, buildRegroupMenuItems]);
 
   // Combine action column with data columns
   const finalColumns = useMemo(() => {
@@ -861,7 +956,8 @@ function MatchableDataTable({
         fileType === 1 &&
         sectionType === "partial" &&
         row.group_id &&
-        isSelecting
+        isSelecting &&
+        autoSelectEnabled
       ) {
         const rowsWithSameGroup = data.filter(
           (r) =>
@@ -915,8 +1011,8 @@ function MatchableDataTable({
         });
       }
 
-      // Handle Insurer row auto-selection using matched_insurer_indices
-      if (fileType === 1 && onRowSelection) {
+      // Handle Insurer row auto-selection using matched_insurer_indices (only when auto-select is enabled)
+      if (fileType === 1 && onRowSelection && autoSelectEnabled) {
         if (isSelecting) {
           // When SELECTING, auto-select related insurer rows
           const targetIndices = calculateTargetRowIndices(row);
@@ -968,6 +1064,7 @@ function MatchableDataTable({
       onRemoveAutoSelection,
       onRestoreAutoSelection,
       calculateTargetRowIndices,
+      autoSelectEnabled,
     ],
   );
 
@@ -979,18 +1076,21 @@ function MatchableDataTable({
       const isManuallySelected = manuallySelectedRows.includes(record.idx);
       const wasManuallyDeselected = manuallyDeselectedRows.includes(record.idx);
       const isEmptyRow = Object.values(record).every((value) => value === "");
+      const isRegroupTarget = regroupTargetIdxs.includes(record.idx) && isRegroupTargetInThisBucket;
 
+      if (isRegroupTarget) {
+        return "regroup-target-row";
+      }
       if (isSelected) {
-        // Prioritize manual selection over auto-selection for styling
         if (isManuallySelected) {
-          return "selected-row"; // Blue highlighting for manual selection
+          return "selected-row";
         } else if (isAutoSelected) {
-          return "auto-selected-row"; // Green highlighting for auto-selection only
+          return "auto-selected-row";
         }
-        return "selected-row"; // Default to manual selection styling
+        return "selected-row";
       }
       if (wasManuallyDeselected) {
-        return "manually-deselected-row"; // Gray with dashed border - can be restored
+        return "manually-deselected-row";
       }
       if (isEmptyRow) {
         return "empty-row";
@@ -1002,6 +1102,8 @@ function MatchableDataTable({
       externalSelectedRows,
       manuallySelectedRows,
       manuallyDeselectedRows,
+      regroupTargetIdxs,
+      isRegroupTargetInThisBucket,
     ],
   );
 
@@ -1314,25 +1416,47 @@ function MatchableDataTable({
           }}
         >
           {fileType === 1 && (
-            <Tooltip
-              title={
-                syncScrollEnabled
-                  ? "Disable synchronized scrolling"
-                  : "Enable synchronized scrolling"
-              }
-            >
-              <Button
-                type={syncScrollEnabled ? "primary" : "default"}
-                size="small"
-                onClick={() => onSyncScrollChange?.(!syncScrollEnabled)}
-                style={{
-                  backgroundColor: syncScrollEnabled ? "#1890ff" : undefined,
-                  borderColor: syncScrollEnabled ? "#1890ff" : undefined,
-                }}
+            <>
+              <Tooltip
+                title={
+                  autoSelectEnabled
+                    ? "Disable auto-selection of matching insurer rows"
+                    : "Enable auto-selection of matching insurer rows"
+                }
               >
-                Sync Scroll
-              </Button>
-            </Tooltip>
+                <Button
+                  type={autoSelectEnabled ? "primary" : "default"}
+                  size="small"
+                  icon={<LinkOutlined />}
+                  onClick={() => onAutoSelectChange?.(!autoSelectEnabled)}
+                  style={{
+                    backgroundColor: autoSelectEnabled ? "#52c41a" : undefined,
+                    borderColor: autoSelectEnabled ? "#52c41a" : undefined,
+                  }}
+                >
+                  Auto Select
+                </Button>
+              </Tooltip>
+              <Tooltip
+                title={
+                  syncScrollEnabled
+                    ? "Disable synchronized scrolling"
+                    : "Enable synchronized scrolling"
+                }
+              >
+                <Button
+                  type={syncScrollEnabled ? "primary" : "default"}
+                  size="small"
+                  onClick={() => onSyncScrollChange?.(!syncScrollEnabled)}
+                  style={{
+                    backgroundColor: syncScrollEnabled ? "#1890ff" : undefined,
+                    borderColor: syncScrollEnabled ? "#1890ff" : undefined,
+                  }}
+                >
+                  Sync Scroll
+                </Button>
+              </Tooltip>
+            </>
           )}
           {selectedRows.length > 0 && fileType === 1 && (
             <Tooltip title="Deselect all selected rows">

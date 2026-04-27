@@ -7,11 +7,23 @@ import {
   DynamicBucketDefinition,
 } from "../utils/reconciliationBuckets";
 
+// Regroup target: a pinned row that defines the destination group for regrouping
+export interface RegroupTarget {
+  row: any;
+  bucket: BucketKey;
+  side: "cbl" | "insurer";
+}
+
 // Action history item type for undo functionality
 export interface ActionHistoryItem {
   id: string;
   timestamp: Date;
-  actionType: "moveToPartial" | "moveToExact" | "unmatch" | "moveToBucket";
+  actionType:
+    | "moveToPartial"
+    | "moveToExact"
+    | "unmatch"
+    | "moveToBucket"
+    | "regroup";
   fromSection: BucketKey;
   toSection: BucketKey;
   cblRows: any[];
@@ -20,6 +32,14 @@ export interface ActionHistoryItem {
   cblRowIndices: number[];
   insurerRowIndices: number[];
   matrixKey: string;
+  // Regroup-specific: rows moved to no-match because only one side was selected
+  orphanedCblRows?: any[];
+  orphanedInsurerRows?: any[];
+  orphanedCblRowIndices?: number[];
+  orphanedInsurerRowIndices?: number[];
+  // Regroup-specific: original group/index values for undo
+  originalCblData?: any[];
+  originalInsurerData?: any[];
 }
 
 interface ReconciliationContextType {
@@ -118,8 +138,15 @@ interface ReconciliationContextType {
 
   // Match history for cross-session persistence
   matchHistoryEntries: MatchHistoryEntry[];
-  setMatchHistoryEntries: React.Dispatch<React.SetStateAction<MatchHistoryEntry[]>>;
+  setMatchHistoryEntries: React.Dispatch<
+    React.SetStateAction<MatchHistoryEntry[]>
+  >;
   addMatchHistoryEntry: (entry: MatchHistoryEntry) => void;
+
+  // Regroup target
+  regroupTarget: RegroupTarget | null;
+  setRegroupTarget: React.Dispatch<React.SetStateAction<RegroupTarget | null>>;
+  clearRegroupTarget: () => void;
 }
 
 const ReconciliationContext = createContext<
@@ -144,9 +171,9 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
   // No match states
   const [noMatchCBL, setNoMatchCBL] = useState<any[]>([]);
   const [noMatchInsurer, setNoMatchInsurer] = useState<any[]>([]);
-  const [dynamicBuckets, setDynamicBuckets] = useState<DynamicBucketDefinition[]>(
-    [],
-  );
+  const [dynamicBuckets, setDynamicBuckets] = useState<
+    DynamicBucketDefinition[]
+  >([]);
   const [dynamicBucketData, setDynamicBucketData] = useState<
     Record<string, BucketRows>
   >({});
@@ -205,11 +232,19 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   // Match history for cross-session persistence
-  const [matchHistoryEntries, setMatchHistoryEntries] = useState<MatchHistoryEntry[]>([]);
+  const [matchHistoryEntries, setMatchHistoryEntries] = useState<
+    MatchHistoryEntry[]
+  >([]);
 
   const addMatchHistoryEntry = (entry: MatchHistoryEntry) => {
     setMatchHistoryEntries((prev) => [...prev, entry]);
   };
+
+  // Regroup target
+  const [regroupTarget, setRegroupTarget] = useState<RegroupTarget | null>(
+    null,
+  );
+  const clearRegroupTarget = () => setRegroupTarget(null);
 
   return (
     <ReconciliationContext.Provider
@@ -305,6 +340,11 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
         matchHistoryEntries,
         setMatchHistoryEntries,
         addMatchHistoryEntry,
+
+        // Regroup target
+        regroupTarget,
+        setRegroupTarget,
+        clearRegroupTarget,
       }}
     >
       {children}
@@ -316,7 +356,7 @@ export const useReconciliation = (): ReconciliationContextType => {
   const context = useContext(ReconciliationContext);
   if (context === undefined) {
     throw new Error(
-      "useReconciliation must be used within a ReconciliationProvider"
+      "useReconciliation must be used within a ReconciliationProvider",
     );
   }
   return context;

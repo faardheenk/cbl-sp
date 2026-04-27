@@ -65,6 +65,13 @@ const UploadModal: React.FC<UploadModalProps> = ({
     onClose();
   };
 
+  /** SharePoint name for upload; keeps the original extension (.xls / .xlsx). */
+  const genericExcelName = (base: "cbl" | "insurer", originalName: string) => {
+    const extMatch = originalName.match(/(\.[A-Za-z0-9]+)$/);
+    const ext = extMatch ? extMatch[1].toLowerCase() : ".xlsx";
+    return `${base}${ext}`;
+  };
+
   const handleUpload = async (
     file1: File | null,
     file2: File | null,
@@ -114,10 +121,10 @@ const UploadModal: React.FC<UploadModalProps> = ({
         Status: "Pending",
       });
 
-      // Upload excel files to renamed folder
+      // Upload excel files to renamed folder (generic names on SharePoint)
       await uploadExcelFiles(sp, [file1, file2], updatedFolderPath, [
-        file1.name,
-        file2.name,
+        genericExcelName("cbl", file1.name),
+        genericExcelName("insurer", file2.name),
       ]);
 
       dispatchToast(
