@@ -3,8 +3,13 @@ import * as XLSX from "xlsx";
 import { BucketKey } from "./reconciliationBuckets";
 
 export interface MatchHistoryEntry {
+  actionType?: "move" | "regroup";
   cblFingerprints: string[];
   insurerFingerprints: string[];
+  targetCblFingerprints?: string[];
+  targetInsurerFingerprints?: string[];
+  orphanedCblFingerprints?: string[];
+  orphanedInsurerFingerprints?: string[];
   cblRemarks?: string[];
   insurerRemarks?: string[];
   targetBucket: BucketKey;
@@ -14,8 +19,17 @@ export interface MatchHistoryEntry {
 
 const serializeMatchHistoryEntries = (entries: MatchHistoryEntry[]) =>
   entries.map((entry) => ({
+    ActionType: entry.actionType || "move",
     CblFingerprints: JSON.stringify(entry.cblFingerprints),
     InsurerFingerprints: JSON.stringify(entry.insurerFingerprints),
+    TargetCblFingerprints: JSON.stringify(entry.targetCblFingerprints || []),
+    TargetInsurerFingerprints: JSON.stringify(
+      entry.targetInsurerFingerprints || [],
+    ),
+    OrphanedCblFingerprints: JSON.stringify(entry.orphanedCblFingerprints || []),
+    OrphanedInsurerFingerprints: JSON.stringify(
+      entry.orphanedInsurerFingerprints || [],
+    ),
     CblRemarks: JSON.stringify(entry.cblRemarks || []),
     InsurerRemarks: JSON.stringify(entry.insurerRemarks || []),
     FromBucket: entry.fromBucket,
@@ -33,8 +47,13 @@ const createMatchHistoryWorkbook = (entries: MatchHistoryEntry[]) => {
       worksheet,
       [
         [
+          "ActionType",
           "CblFingerprints",
           "InsurerFingerprints",
+          "TargetCblFingerprints",
+          "TargetInsurerFingerprints",
+          "OrphanedCblFingerprints",
+          "OrphanedInsurerFingerprints",
           "CblRemarks",
           "InsurerRemarks",
           "FromBucket",
@@ -281,8 +300,17 @@ export const readMatchHistory = async (
     const rows = XLSX.utils.sheet_to_json<any>(worksheet, { defval: "" });
 
     return rows.map((row: any) => ({
+      actionType: (row.ActionType || "move") as MatchHistoryEntry["actionType"],
       cblFingerprints: JSON.parse(row.CblFingerprints || "[]"),
       insurerFingerprints: JSON.parse(row.InsurerFingerprints || "[]"),
+      targetCblFingerprints: JSON.parse(row.TargetCblFingerprints || "[]"),
+      targetInsurerFingerprints: JSON.parse(
+        row.TargetInsurerFingerprints || "[]",
+      ),
+      orphanedCblFingerprints: JSON.parse(row.OrphanedCblFingerprints || "[]"),
+      orphanedInsurerFingerprints: JSON.parse(
+        row.OrphanedInsurerFingerprints || "[]",
+      ),
       cblRemarks: JSON.parse(row.CblRemarks || "[]"),
       insurerRemarks: JSON.parse(row.InsurerRemarks || "[]"),
       fromBucket: row.FromBucket as BucketKey,

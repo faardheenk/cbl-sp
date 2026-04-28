@@ -1,4 +1,5 @@
 import { ColumnsType } from "antd/es/table";
+import { getTargetInsurerRowIdsForCblRow } from "./rowMapping";
 
 export const formatAmount = (amount: number): string => {
   return new Intl.NumberFormat("en-US", {
@@ -244,60 +245,6 @@ export const manualMatching = (
       console.log("[Orphaned Rows] None");
     }
 
-    const getTargetInsurerIdxs = (
-      cblRow: any,
-      allCblRows: any[],
-    ): string[] => {
-      if (
-        !cblRow?.matched_insurer_indices ||
-        typeof cblRow.matched_insurer_indices !== "string"
-      ) {
-        return [];
-      }
-
-      try {
-        const indices = JSON.parse(cblRow.matched_insurer_indices);
-        if (!Array.isArray(indices)) {
-          return [];
-        }
-
-        const currentIdx = cblRow.idx;
-        const prefix = currentIdx.replace(/[0-9]+/, "");
-        const rowsWithSameIndices = allCblRows.filter(
-          (row) =>
-            row.matched_insurer_indices === cblRow.matched_insurer_indices,
-        );
-
-        if (rowsWithSameIndices.length === 0) {
-          return [];
-        }
-
-        const firstMatchingRow = rowsWithSameIndices.reduce((first, current) => {
-          const firstNumeric = parseInt(first.idx.replace(/[^0-9]/g, ""), 10);
-          const currentNumeric = parseInt(
-            current.idx.replace(/[^0-9]/g, ""),
-            10,
-          );
-          return currentNumeric < firstNumeric ? current : first;
-        });
-
-        const baseRowNumericPart = firstMatchingRow.idx.replace(/[^0-9]/g, "");
-        const baseIndex = parseInt(baseRowNumericPart, 10);
-        if (isNaN(baseIndex)) {
-          return [];
-        }
-
-        const targetIdxs: string[] = [];
-        for (let i = 0; i < indices.length; i++) {
-          targetIdxs.push(`${prefix}${baseIndex + i}`);
-        }
-
-        return targetIdxs;
-      } catch (e) {
-        return [];
-      }
-    };
-
     // Build a set of selected CBL row indices for quick lookup
     const selectedCBLIndices = new Set(
       filteredSelectedRowsCBL.map((row) => row.idx),
@@ -305,7 +252,7 @@ export const manualMatching = (
 
     const selectedGroupInsurerIdxs = new Set<string>();
     filteredSelectedRowsCBL.forEach((cblRow) => {
-      const targetIdxs = getTargetInsurerIdxs(cblRow, rowsCBL);
+      const targetIdxs = getTargetInsurerRowIdsForCblRow(cblRow, rowsCBL);
       targetIdxs.forEach((idx: string) => selectedGroupInsurerIdxs.add(idx));
     });
 
@@ -533,7 +480,7 @@ export const manualMatching = (
 
         const groupInsurerIdxs = new Set<string>();
         cblRows.forEach((cblRow) => {
-          const targetIdxs = getTargetInsurerIdxs(cblRow, rowsCBL);
+          const targetIdxs = getTargetInsurerRowIdsForCblRow(cblRow, rowsCBL);
           targetIdxs.forEach((idx: string) => groupInsurerIdxs.add(idx));
         });
 
@@ -668,61 +615,6 @@ export const repairMatchedIndicesAfterUndo = (
     return partialMatchCBL;
   }
 
-  // Helper function to get target insurer indices for a CBL row
-  const getTargetInsurerIdxs = (
-    cblRow: any,
-    allCblRows: any[],
-  ): string[] => {
-    if (
-      !cblRow?.matched_insurer_indices ||
-      typeof cblRow.matched_insurer_indices !== "string"
-    ) {
-      return [];
-    }
-
-    try {
-      const indices = JSON.parse(cblRow.matched_insurer_indices);
-      if (!Array.isArray(indices)) {
-        return [];
-      }
-
-      const currentIdx = cblRow.idx;
-      const prefix = currentIdx.replace(/[0-9]+/, "");
-      const rowsWithSameIndices = allCblRows.filter(
-        (row) =>
-          row.matched_insurer_indices === cblRow.matched_insurer_indices,
-      );
-
-      if (rowsWithSameIndices.length === 0) {
-        return [];
-      }
-
-      const firstMatchingRow = rowsWithSameIndices.reduce((first, current) => {
-        const firstNumeric = parseInt(first.idx.replace(/[^0-9]/g, ""), 10);
-        const currentNumeric = parseInt(
-          current.idx.replace(/[^0-9]/g, ""),
-          10,
-        );
-        return currentNumeric < firstNumeric ? current : first;
-      });
-
-      const baseRowNumericPart = firstMatchingRow.idx.replace(/[^0-9]/g, "");
-      const baseIndex = parseInt(baseRowNumericPart, 10);
-      if (isNaN(baseIndex)) {
-        return [];
-      }
-
-      const targetIdxs: string[] = [];
-      for (let i = 0; i < indices.length; i++) {
-        targetIdxs.push(`${prefix}${baseIndex + i}`);
-      }
-
-      return targetIdxs;
-    } catch (e) {
-      return [];
-    }
-  };
-
   // Group CBL rows by their group_id or matched_insurer_indices
   const groupToCBLRows = new Map<string, any[]>();
 
@@ -743,7 +635,10 @@ export const repairMatchedIndicesAfterUndo = (
     // Get all insurer indices that belong to this group
     const groupInsurerIdxs = new Set<string>();
     cblRows.forEach((cblRow) => {
-      const targetIdxs = getTargetInsurerIdxs(cblRow, partialMatchCBL);
+      const targetIdxs = getTargetInsurerRowIdsForCblRow(
+        cblRow,
+        partialMatchCBL,
+      );
       targetIdxs.forEach((idx: string) => groupInsurerIdxs.add(idx));
     });
 

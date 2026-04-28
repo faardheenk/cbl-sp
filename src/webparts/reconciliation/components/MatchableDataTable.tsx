@@ -21,6 +21,7 @@ import {
 } from "@ant-design/icons";
 import "react-resizable/css/styles.css";
 import { BucketKey } from "../../../utils/reconciliationBuckets";
+import { getTargetInsurerRowIdsForCblRow } from "../../../utils/rowMapping";
 
 // Custom styles for resizable handles and consistent row heights
 const resizableStyles = `
@@ -561,71 +562,8 @@ function MatchableDataTable({
     );
   }, [selectedRows, manuallyDeselectedRowsLocal, data, fileType]);
 
-  // Helper function to parse matched_insurer_indices and calculate target row indices
   const calculateTargetRowIndices = useCallback(
-    (row: any): string[] => {
-      if (
-        !row.matched_insurer_indices ||
-        typeof row.matched_insurer_indices !== "string"
-      ) {
-        return [];
-      }
-
-      try {
-        // Parse the string into an array
-        const indices = JSON.parse(row.matched_insurer_indices);
-        if (!Array.isArray(indices)) {
-          return [];
-        }
-
-        // Get the current row's idx and extract the prefix
-        const currentIdx = row.idx;
-        const prefix = currentIdx.replace(/[0-9]+/, "");
-
-        // Find the FIRST CBL row (lowest index) in the data that has the same matched_insurer_indices
-        // This ensures all CBL rows with the same matched_insurer_indices select the same insurer rows
-        const rowsWithSameIndices = data.filter(
-          (r) => r.matched_insurer_indices === row.matched_insurer_indices,
-        );
-
-        if (rowsWithSameIndices.length === 0) {
-          return [];
-        }
-
-        // Find the row with the lowest numeric index
-        const firstMatchingRow = rowsWithSameIndices.reduce(
-          (first, current) => {
-            const firstNumeric = parseInt(first.idx.replace(/[^0-9]/g, ""), 10);
-            const currentNumeric = parseInt(
-              current.idx.replace(/[^0-9]/g, ""),
-              10,
-            );
-            return currentNumeric < firstNumeric ? current : first;
-          },
-        );
-
-        // Use the first matching row's position as the base
-        const baseRowNumericPart = firstMatchingRow.idx.replace(/[^0-9]/g, "");
-        const baseIndex = parseInt(baseRowNumericPart, 10);
-
-        if (isNaN(baseIndex)) {
-          return [];
-        }
-
-        // Calculate target indices based on the array length and base index
-        // All CBL rows with the same matched_insurer_indices will use the same base index
-        const targetIndices: string[] = [];
-        for (let i = 0; i < indices.length; i++) {
-          // Generate target idx with same prefix as current row but using the base index
-          const targetIdx = `${prefix}${baseIndex + i}`;
-          targetIndices.push(targetIdx);
-        }
-
-        return targetIndices;
-      } catch (error) {
-        return [];
-      }
-    },
+    (row: any): string[] => getTargetInsurerRowIdsForCblRow(row, data),
     [data],
   );
 
