@@ -157,6 +157,7 @@ function MatchableComponent({
   const [autoSelectedInsurerRows, setAutoSelectedInsurerRows] = useState<
     string[]
   >([]);
+  const [autoSelectedCblRows, setAutoSelectedCblRows] = useState<string[]>([]);
 
   // Selected subtotals for CBL and Insurer (for difference display)
   const [cblSelectedSubtotal, setCblSelectedSubtotal] = useState<number>(0);
@@ -165,6 +166,9 @@ function MatchableComponent({
 
   // Track which CBL rows are selected and their corresponding Insurer mappings
   const [cblSelectionMappings, setCblSelectionMappings] = useState<
+    Map<string, string[]>
+  >(new Map());
+  const [insurerSelectionMappings, setInsurerSelectionMappings] = useState<
     Map<string, string[]>
   >(new Map());
 
@@ -195,7 +199,9 @@ function MatchableComponent({
   useEffect(() => {
     if (clearSelections || clearAllSelections) {
       setAutoSelectedInsurerRows([]);
+      setAutoSelectedCblRows([]);
       setCblSelectionMappings(new Map());
+      setInsurerSelectionMappings(new Map());
       setManuallyDeselectedRows(new Set());
     }
   }, [clearSelections, clearAllSelections]);
@@ -205,7 +211,9 @@ function MatchableComponent({
     setAutoSelectEnabled(enabled);
     if (!enabled) {
       setAutoSelectedInsurerRows([]);
+      setAutoSelectedCblRows([]);
       setCblSelectionMappings(new Map());
+      setInsurerSelectionMappings(new Map());
       setManuallyDeselectedRows(new Set());
     }
   };
@@ -217,8 +225,11 @@ function MatchableComponent({
     sourceRowId?: string,
     isDeselection?: boolean,
   ) => {
-    if (sourceFileType === 1) {
-      setCblSelectionMappings((prevMappings) => {
+    const updateMappings = (
+      setMappings: React.Dispatch<React.SetStateAction<Map<string, string[]>>>,
+      setAutoSelectedRows: React.Dispatch<React.SetStateAction<string[]>>,
+    ) => {
+      setMappings((prevMappings) => {
         const newMappings = new Map(prevMappings);
 
         if (isDeselection) {
@@ -236,10 +247,10 @@ function MatchableComponent({
           }
         }
 
-        // Calculate all auto-selected Insurer rows from all CBL selections
+        // Calculate all auto-selected rows from the opposite-side selections
         const allAutoSelectedRows: string[] = [];
-        newMappings.forEach((insurerRows) => {
-          allAutoSelectedRows.push(...insurerRows);
+        newMappings.forEach((mappedRows) => {
+          allAutoSelectedRows.push(...mappedRows);
         });
 
         // Remove duplicates and filter out manually deselected rows
@@ -247,11 +258,17 @@ function MatchableComponent({
           new Set(allAutoSelectedRows),
         ).filter((rowId) => !manuallyDeselectedRows.has(rowId));
 
-        // Update insurer rows in the same state update to avoid race conditions
-        setAutoSelectedInsurerRows(uniqueAutoSelectedRows);
+        // Update opposite-side rows in the same state update to avoid race conditions
+        setAutoSelectedRows(uniqueAutoSelectedRows);
 
         return newMappings;
       });
+    };
+
+    if (sourceFileType === 1) {
+      updateMappings(setCblSelectionMappings, setAutoSelectedInsurerRows);
+    } else {
+      updateMappings(setInsurerSelectionMappings, setAutoSelectedCblRows);
     }
   };
 
@@ -278,6 +295,7 @@ function MatchableComponent({
       (id) => id !== rowId,
     );
     setAutoSelectedInsurerRows(newAutoSelected);
+    setAutoSelectedCblRows(autoSelectedCblRows.filter((id) => id !== rowId));
   };
 
   // Handler for re-selecting a manually deselected row
@@ -287,16 +305,30 @@ function MatchableComponent({
     newManuallyDeselected.delete(rowId);
     setManuallyDeselectedRows(newManuallyDeselected);
 
-    // Check if this row should be auto-selected based on current CBL mappings
+    // Check if this row should be auto-selected based on current cross-table mappings
     const allMappedRows: string[] = [];
     Array.from(cblSelectionMappings.values()).forEach((rows) => {
       allMappedRows.push(...rows);
     });
+    Array.from(insurerSelectionMappings.values()).forEach((rows) => {
+      allMappedRows.push(...rows);
+    });
     const shouldBeAutoSelected = allMappedRows.includes(rowId);
 
-    if (shouldBeAutoSelected && !autoSelectedInsurerRows.includes(rowId)) {
-      const newAutoSelected = [...autoSelectedInsurerRows, rowId];
-      setAutoSelectedInsurerRows(newAutoSelected);
+    if (shouldBeAutoSelected) {
+      if (
+        rowId.startsWith("EM-") ||
+        rowId.startsWith("PM-") ||
+        rowId.startsWith("NM-") ||
+        dataFile2.some((row) => row.idx === rowId)
+      ) {
+        if (!autoSelectedInsurerRows.includes(rowId)) {
+          setAutoSelectedInsurerRows([...autoSelectedInsurerRows, rowId]);
+        }
+      }
+      if (dataFile1.some((row) => row.idx === rowId) && !autoSelectedCblRows.includes(rowId)) {
+        setAutoSelectedCblRows([...autoSelectedCblRows, rowId]);
+      }
     }
   };
 
@@ -367,11 +399,16 @@ function MatchableComponent({
                 <MatchableDataTable
                   fileType={1}
                   data={dataFile1}
+                  relatedData={dataFile2}
                   setPartialMatchesSetter={setMatchesFile1}
                   setSelectedRowData={setSelectedRowCBL}
                   onSumChange={setSum1}
                   columns={cblColumns}
+                  externalSelectedRows={autoSelectedCblRows}
                   onRowSelection={handleRowSelection}
+                  onRemoveAutoSelection={handleRemoveAutoSelection}
+                  onRestoreAutoSelection={handleRestoreAutoSelection}
+                  manuallyDeselectedRows={Array.from(manuallyDeselectedRows)}
                   clearSelections={clearSelections || clearAllSelections}
                   loading={loading}
                   searchText={sharedSearchText}
@@ -435,6 +472,7 @@ function MatchableComponent({
                 <MatchableDataTable
                   fileType={2}
                   data={dataFile2}
+                  relatedData={dataFile1}
                   setPartialMatchesSetter={setMatchesFile2}
                   setSelectedRowData={setSelectedRowInsurer}
                   onSumChange={setSum2}
@@ -462,6 +500,7 @@ function MatchableComponent({
                   onScroll={handleInsurerScroll}
                   externalScrollTop={cblScrollTop}
                   onSelectedSubtotalChange={setInsurerSelectedSubtotal}
+                  autoSelectEnabled={autoSelectEnabled}
                   regroupTargetIdxs={regroupTargetIdxs}
                   onSetRegroupTarget={(row) => onSetRegroupTarget?.(row, type, "insurer")}
                   onClearRegroupTarget={onClearRegroupTarget}

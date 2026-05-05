@@ -42,6 +42,7 @@ import {
   isMatchedBucket,
 } from "../../../utils/reconciliationBuckets";
 import {
+  getRowGroupId,
   getTargetInsurerRowIdsForCblRow,
   parseMatchedInsurerIndicesField,
 } from "../../../utils/rowMapping";
@@ -83,6 +84,25 @@ function computeRegroupTargetParallelRange(
   const sideArr = targetSide === "cbl" ? cblArr : insArr;
   const targetIndex = findSideRowIndex(sideArr, targetRow);
   if (targetIndex === -1) return null;
+
+  const targetGroupId = getRowGroupId(targetRow);
+  if (targetGroupId) {
+    const groupPositions = [...cblArr, ...insArr]
+      .map((row, index) => ({
+        index: index < cblArr.length ? index : index - cblArr.length,
+        matches: getRowGroupId(row) === targetGroupId,
+      }))
+      .filter((entry) => entry.matches)
+      .map((entry) => entry.index);
+
+    if (groupPositions.length > 0) {
+      return {
+        groupStart: Math.min(...groupPositions),
+        groupEnd: Math.max(...groupPositions),
+        targetIndex,
+      };
+    }
+  }
 
   let anchorCblIndex: number;
 
@@ -1105,82 +1125,26 @@ function Reconciliation() {
           }
         });
 
-        // For equalized tables, find the range including blank rows
-        const cblIndicesArray = Array.from(rowsToRemoveCBL);
-        const insurerIndicesArray = Array.from(rowsToRemoveInsurer);
+        // Remove selected rows plus their same-position opposite spacer only.
+        // A broad min..max range is unsafe for regrouped exact buckets because
+        // group-selected real rows can span blank spacers without meaning that
+        // neighboring groups' spacers should be removed.
+        const finalRowsToRemoveCBL = new Set(rowsToRemoveCBL);
+        const finalRowsToRemoveInsurer = new Set(rowsToRemoveInsurer);
 
-        // Find the base range for each array
-        const cblBaseRange = findEqualizedRange(source.cbl, cblIndicesArray);
-        const insurerBaseRange = findEqualizedRange(
-          source.insurer,
-          insurerIndicesArray,
-        );
-
-        // Determine the target length (the longer of the two, as tables are equalized)
-        const targetLength = Math.max(
-          cblBaseRange.length,
-          insurerBaseRange.length,
-        );
-
-        // Extend CBL range to match target length (includes blank rows for equalization)
-        const cblRangeToMove = [...cblBaseRange];
-        let cblMaxIndex =
-          cblBaseRange.length > 0 ? Math.max(...cblBaseRange) : -1;
-        while (
-          cblRangeToMove.length < targetLength &&
-          cblMaxIndex + 1 < source.cbl.length
-        ) {
-          cblMaxIndex++;
-          // Include next row if it's blank (part of equalization) or if we need to reach target length
+        rowsToRemoveCBL.forEach((position) => {
           if (
-            isBlankRow(source.cbl[cblMaxIndex]) ||
-            cblRangeToMove.length < targetLength
+            position < source.insurer.length &&
+            isBlankRow(source.insurer[position])
           ) {
-            cblRangeToMove.push(cblMaxIndex);
+            finalRowsToRemoveInsurer.add(position);
           }
-        }
-
-        // Extend insurer range to match target length
-        const insurerRangeToMove = [...insurerBaseRange];
-        let insurerMaxIndex =
-          insurerBaseRange.length > 0 ? Math.max(...insurerBaseRange) : -1;
-        while (
-          insurerRangeToMove.length < targetLength &&
-          insurerMaxIndex + 1 < source.insurer.length
-        ) {
-          insurerMaxIndex++;
-          // Include next row if it's blank (part of equalization) or if we need to reach target length
-          if (
-            isBlankRow(source.insurer[insurerMaxIndex]) ||
-            insurerRangeToMove.length < targetLength
-          ) {
-            insurerRangeToMove.push(insurerMaxIndex);
+        });
+        rowsToRemoveInsurer.forEach((position) => {
+          if (position < source.cbl.length && isBlankRow(source.cbl[position])) {
+            finalRowsToRemoveCBL.add(position);
           }
-        }
-
-        // Final check: ensure both ranges are exactly the same length (equalized)
-        const finalLength = Math.max(
-          cblRangeToMove.length,
-          insurerRangeToMove.length,
-        );
-        while (
-          cblRangeToMove.length < finalLength &&
-          cblMaxIndex + 1 < source.cbl.length
-        ) {
-          cblMaxIndex++;
-          cblRangeToMove.push(cblMaxIndex);
-        }
-        while (
-          insurerRangeToMove.length < finalLength &&
-          insurerMaxIndex + 1 < source.insurer.length
-        ) {
-          insurerMaxIndex++;
-          insurerRangeToMove.push(insurerMaxIndex);
-        }
-
-        // Create sets from the extended ranges
-        const finalRowsToRemoveCBL = new Set(cblRangeToMove);
-        const finalRowsToRemoveInsurer = new Set(insurerRangeToMove);
+        });
 
         // Filter out rows to remove
         updatedSourceCBL = source.cbl.filter(
@@ -1681,29 +1645,13 @@ function Reconciliation() {
         triggerClearAllSelections();
         return;
       } else {
-        // Remove blank rows from source after moving
-        const sourceCBLWithoutBlanks = updatedSourceCBL.filter(
-          (row) => !isBlankRow(row),
-        );
-        const sourceInsurerWithoutBlanks = updatedSourceInsurer.filter(
-          (row) => !isBlankRow(row),
-        );
-
-        // Re-equalize source tables (remove old blank rows, add new ones if needed)
-        // Only re-equalize if source section is exact or partial (no-match doesn't need equalization)
-        let finalSourceCBL = sourceCBLWithoutBlanks;
-        let finalSourceInsurer = sourceInsurerWithoutBlanks;
+        // Preserve existing spacer rows in matched buckets. Removing all blanks
+        // here destroys unrelated groups after moving a regrouped block.
+        let finalSourceCBL = updatedSourceCBL;
+        const finalSourceInsurer = updatedSourceInsurer;
 
         if (isMatchedBucket(fromSection)) {
-          const currentSourceMatchGroup = getNextMatchGroup(
-            sourceCBLWithoutBlanks,
-            sourceInsurerWithoutBlanks,
-          );
-          [finalSourceCBL, finalSourceInsurer] = equalizeWorksheetLengths(
-            sourceCBLWithoutBlanks,
-            sourceInsurerWithoutBlanks,
-            currentSourceMatchGroup,
-          );
+          finalSourceCBL = repairParallelMatchedInsurerIndices(finalSourceCBL);
         }
 
         // Regenerate source indices
@@ -1717,39 +1665,51 @@ function Reconciliation() {
         setBucketRows(fromSection, "insurer", regeneratedSourceInsurer);
       }
 
-      // Add to destination
-      // First, remove blank rows from destination (clean up before adding)
-      const destinationCBLWithoutBlanks = destination.cbl.filter(
-        (row) => !isBlankRow(row),
-      );
-      const destinationInsurerWithoutBlanks = destination.insurer.filter(
-        (row) => !isBlankRow(row),
-      );
+      // Add to destination. Keep existing matched-bucket spacers intact; they
+      // belong to already-rendered groups and should not be globally stripped.
+      const destinationCBLBase = isMatchedBucket(toSection)
+        ? destination.cbl
+        : destination.cbl.filter((row) => !isBlankRow(row));
+      const destinationInsurerBase = isMatchedBucket(toSection)
+        ? destination.insurer
+        : destination.insurer.filter((row) => !isBlankRow(row));
 
       const nextMatchGroup = getNextMatchGroup(
-        destinationCBLWithoutBlanks,
-        destinationInsurerWithoutBlanks,
+        destinationCBLBase,
+        destinationInsurerBase,
       );
 
+      const cblRowsToAdd = isMatchedBucket(toSection)
+        ? rowsToMoveCBL
+        : rowsToMoveCBL.filter((row) => !isBlankRow(row));
+      const insurerRowsToAdd = isMatchedBucket(toSection)
+        ? rowsToMoveInsurer
+        : rowsToMoveInsurer.filter((row) => !isBlankRow(row));
+
       const rowsWithGroupCBL = addGroupAndCondition(
-        rowsToMoveCBL,
+        cblRowsToAdd,
         nextMatchGroup,
       );
       const rowsWithGroupInsurer = addGroupAndCondition(
-        rowsToMoveInsurer,
+        insurerRowsToAdd,
         nextMatchGroup,
       );
 
       // Add new rows to cleaned destination
       // Note: We don't re-equalize at destination since we're moving an already-equalized group
       let newDestinationCBL = [
-        ...destinationCBLWithoutBlanks,
+        ...destinationCBLBase,
         ...rowsWithGroupCBL,
       ];
       let newDestinationInsurer = [
-        ...destinationInsurerWithoutBlanks,
+        ...destinationInsurerBase,
         ...rowsWithGroupInsurer,
       ];
+
+      if (isMatchedBucket(toSection)) {
+        newDestinationCBL =
+          repairParallelMatchedInsurerIndices(newDestinationCBL);
+      }
 
       // Regenerate destination indices
       const regeneratedDestinationCBL = regenerateIdx(

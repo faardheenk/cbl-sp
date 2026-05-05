@@ -22,6 +22,21 @@ export function parseMatchedInsurerIndicesField(
   }
 }
 
+export function getRowGroupId(row: any): string | null {
+  const raw = row?.group_id;
+  if (raw == null) return null;
+
+  const value = String(raw).trim();
+  return value ? value : null;
+}
+
+export function getRowsWithSameGroupId(row: any, rows: any[]): any[] {
+  const groupId = getRowGroupId(row);
+  if (!groupId) return [];
+
+  return rows.filter((candidate) => getRowGroupId(candidate) === groupId);
+}
+
 function parseBucketRowId(
   rowId: unknown,
 ): { prefix: string; index: number } | null {
@@ -56,7 +71,17 @@ function buildBucketRowIdFromTemplate(
 export function getTargetInsurerRowIdsForCblRow(
   cblRow: any,
   allCblRowsInBucket: any[],
+  allInsurerRowsInBucket?: any[],
 ): string[] {
+  if (allInsurerRowsInBucket) {
+    const groupRows = getRowsWithSameGroupId(cblRow, allInsurerRowsInBucket);
+    if (groupRows.length > 0) {
+      return groupRows
+        .filter((row) => row?.idx && row?.ProcessedAmount !== "")
+        .map((row) => row.idx);
+    }
+  }
+
   const matchedIndices = parseMatchedInsurerIndicesField(
     cblRow?.matched_insurer_indices,
   );

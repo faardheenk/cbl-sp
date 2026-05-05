@@ -21,7 +21,11 @@ import {
 } from "@ant-design/icons";
 import "react-resizable/css/styles.css";
 import { BucketKey } from "../../../utils/reconciliationBuckets";
-import { getTargetInsurerRowIdsForCblRow } from "../../../utils/rowMapping";
+import {
+  getRowGroupId,
+  getRowsWithSameGroupId,
+  getTargetInsurerRowIdsForCblRow,
+} from "../../../utils/rowMapping";
 
 // Custom styles for resizable handles and consistent row heights
 const resizableStyles = `
@@ -203,6 +207,7 @@ if (typeof document !== "undefined") {
 
 type Props = {
   data: any[];
+  relatedData?: any[];
   setPartialMatchesSetter: React.Dispatch<React.SetStateAction<any[]>>;
   setSelectedRowData?: React.Dispatch<React.SetStateAction<any[]>>;
   fileType: 1 | 2;
@@ -327,6 +332,7 @@ const ResizableTitle = (props: any) => {
 
 function MatchableDataTable({
   data,
+  relatedData = [],
   setPartialMatchesSetter,
   setSelectedRowData,
   fileType,
@@ -563,8 +569,17 @@ function MatchableDataTable({
   }, [selectedRows, manuallyDeselectedRowsLocal, data, fileType]);
 
   const calculateTargetRowIndices = useCallback(
-    (row: any): string[] => getTargetInsurerRowIdsForCblRow(row, data),
-    [data],
+    (row: any): string[] => {
+      if (fileType === 1) {
+        return getTargetInsurerRowIdsForCblRow(row, data, relatedData);
+      }
+
+      const groupRows = getRowsWithSameGroupId(row, relatedData);
+      return groupRows
+        .filter((relatedRow) => relatedRow?.idx && relatedRow?.ProcessedAmount !== "")
+        .map((relatedRow) => relatedRow.idx);
+    },
+    [data, fileType, relatedData],
   );
 
   // Initialize column widths - default width of 150px for each column
@@ -887,20 +902,19 @@ function MatchableDataTable({
       // Determine if we're selecting or deselecting
       const isSelecting = !isCurrentlySelected;
 
-      // Partial-match groups should select together on the CBL side.
-      // Exact and other sections may carry backend group_id values that are not
-      // safe for UI bulk-selection.
+      // Backend now provides group_id as the UI selection/highlight group across
+      // matched buckets. No-match rows keep group_id empty and remain individual.
+      const groupId = getRowGroupId(row);
       if (
-        fileType === 1 &&
-        sectionType === "partial" &&
-        row.group_id &&
+        groupId &&
+        sectionType !== "no-match" &&
         isSelecting &&
         autoSelectEnabled
       ) {
         const rowsWithSameGroup = data.filter(
           (r) =>
             r.idx !== row.idx &&
-            r.group_id === row.group_id &&
+            getRowGroupId(r) === groupId &&
             r.ProcessedAmount !== "",
         );
         rowsToToggle = [row.idx, ...rowsWithSameGroup.map((r) => r.idx)];
@@ -949,45 +963,40 @@ function MatchableDataTable({
         });
       }
 
-      // Handle Insurer row auto-selection using matched_insurer_indices (only when auto-select is enabled)
-      if (fileType === 1 && onRowSelection && autoSelectEnabled) {
+      // Handle cross-table auto-selection using group_id first, with
+      // matched_insurer_indices retained as a CBL-side fallback.
+      if (onRowSelection && autoSelectEnabled) {
         if (isSelecting) {
-          // When SELECTING, auto-select related insurer rows
           const targetIndices = calculateTargetRowIndices(row);
           if (targetIndices.length > 0) {
-            // Create mappings for all selected rows (including group selections)
-            // This ensures that when any row is deselected, others still have mappings
             rowsToToggle.forEach((selectedIdx) => {
               const selectedRow = data.find((r) => r.idx === selectedIdx);
-              // Only create mapping if the row has the same matched_insurer_indices
-              // (for group selections, all rows should have the same matched_insurer_indices)
-              if (
+              const selectedGroupId = getRowGroupId(selectedRow);
+              const shouldMapByGroup =
+                groupId && selectedGroupId && selectedGroupId === groupId;
+              const shouldMapByLegacyIndices =
+                fileType === 1 &&
+                !groupId &&
                 selectedRow &&
-                selectedRow.matched_insurer_indices ===
-                  row.matched_insurer_indices
-              ) {
+                selectedRow.matched_insurer_indices === row.matched_insurer_indices;
+
+              if (shouldMapByGroup || shouldMapByLegacyIndices) {
                 onRowSelection(targetIndices, fileType, selectedIdx, false);
               }
             });
           }
         } else {
-          // When DESELECTING, check if this is the last selected CBL row
           if (newManualSelection.length < 1) {
-            // No more manually selected CBL rows - clear all insurer selections
             onRowSelection([], fileType, undefined, true);
           } else {
-            // Remove this CBL row's mapping
-            // The parent component will recalculate insurer rows from all remaining mappings
-            // Since we create mappings for all rows when selecting (including group selections),
-            // other selected rows with the same matched_insurer_indices will still have their mappings
-            // and insurer rows will remain selected
-            onRowSelection([], fileType, row.idx, true);
+            rowsToToggle.forEach((selectedIdx) => {
+              onRowSelection([], fileType, selectedIdx, true);
+            });
           }
         }
       }
 
-      // For Insurer side (fileType === 2), handle individual row selection/deselection
-      // No need to call onRowSelection for insurer rows - they can be individually selected/deselected
+      // For Insurer side, onRowSelection updates CBL auto-selection when group_id is available.
     },
     [
       selectedRows,
@@ -1003,6 +1012,7 @@ function MatchableDataTable({
       onRestoreAutoSelection,
       calculateTargetRowIndices,
       autoSelectEnabled,
+      sectionType,
     ],
   );
 

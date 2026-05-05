@@ -70,6 +70,9 @@ const Landing = () => {
   const [isCreateBucketOpen, setIsCreateBucketOpen] = useState(false);
   const [newBucketName, setNewBucketName] = useState("");
   const [isCreatingBucket, setIsCreatingBucket] = useState(false);
+  const [rerunningFolderUrl, setRerunningFolderUrl] = useState<string | null>(
+    null,
+  );
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
     { name: "Reconciliation Library", path: "", serverRelativeUrl: "" },
   ]);
@@ -157,20 +160,37 @@ const Landing = () => {
             render: (_text: string, row: any) => {
               if (row.isFolder) return null;
               return (
-                <Button
-                  as="a"
-                  href={row.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  appearance="secondary"
-                  size="medium"
-                  icon={<OpenRegular style={{ fontSize: "16px" }} />}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                />
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <Button
+                    as="a"
+                    href={row.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    appearance="secondary"
+                    size="medium"
+                    icon={<OpenRegular style={{ fontSize: "16px" }} />}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  />
+                  {row.status === "Failed" && (
+                    <Button
+                      appearance="primary"
+                      size="medium"
+                      disabled={rerunningFolderUrl === row.serverRelativeUrl}
+                      icon={
+                        rerunningFolderUrl === row.serverRelativeUrl ? (
+                          <Spinner size="tiny" />
+                        ) : undefined
+                      }
+                      onClick={() => void handleRerunReconciliation(row)}
+                    >
+                      Re-run
+                    </Button>
+                  )}
+                </div>
               );
             },
             key: "action",
@@ -358,7 +378,98 @@ const Landing = () => {
     if (status === "Completed") return "success";
     if (status === "Manual Review") return "primary";
     if (status === "In Progress") return "warning";
+    if (status === "Failed") return "danger";
     return "secondary";
+  };
+
+  const updateFolderAndFilesStatus = async (
+    folderServerRelativeUrl: string,
+    status: Task["status"],
+  ) => {
+    if (!sp) return;
+
+    const folder = sp.web.getFolderByServerRelativePath(folderServerRelativeUrl);
+
+    const folderItem = await folder.getItem();
+    await folderItem.update({ Status: status });
+
+    const files = await folder.files();
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          await sp.web
+            .getFileByServerRelativePath(file.ServerRelativeUrl)
+            .getItem()
+            .then((item) => item.update({ Status: status }));
+        } catch (error) {
+          console.warn(
+            `Could not update status for file ${file.ServerRelativeUrl}:`,
+            error,
+          );
+        }
+      }),
+    );
+  };
+
+  const handleRerunReconciliation = async (row: Task) => {
+    if (!sp || !row.serverRelativeUrl) return;
+
+    try {
+      setRerunningFolderUrl(row.serverRelativeUrl);
+
+      await updateFolderAndFilesStatus(row.serverRelativeUrl, "Pending");
+
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          task.serverRelativeUrl === row.serverRelativeUrl
+            ? { ...task, status: "Pending" }
+            : task,
+        ),
+      );
+
+      dispatchToast(
+        <Toast
+          style={{
+            backgroundColor: "#d4edda",
+            color: "#155724",
+            borderRadius: "8px",
+            border: "1px solid #b7dfc6",
+            boxShadow: "0 8px 24px rgba(15, 23, 42, 0.18)",
+          }}
+        >
+          <ToastTitle style={{ color: "#155724" }}>
+            Reconciliation queued
+          </ToastTitle>
+          <ToastBody style={{ color: "#155724" }}>
+            The failed reconciliation has been reset to pending.
+          </ToastBody>
+        </Toast>,
+        { position: "top", intent: "success" },
+      );
+    } catch (error) {
+      console.error("Failed to reset reconciliation status:", error);
+      dispatchToast(
+        <Toast
+          style={{
+            backgroundColor: "#f8d7da",
+            color: "#721c24",
+            borderRadius: "8px",
+            border: "1px solid #f1b8bf",
+            boxShadow: "0 8px 24px rgba(15, 23, 42, 0.18)",
+          }}
+        >
+          <ToastTitle style={{ color: "#721c24" }}>
+            Re-run failed
+          </ToastTitle>
+          <ToastBody style={{ color: "#721c24" }}>
+            Could not reset the reconciliation to pending.
+          </ToastBody>
+        </Toast>,
+        { position: "top", intent: "error" },
+      );
+    } finally {
+      setRerunningFolderUrl(null);
+    }
   };
 
   const formatBucketLabel = (bucketKey: BucketKey): string => {

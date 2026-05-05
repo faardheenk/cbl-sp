@@ -1,5 +1,11 @@
 import { BucketKey, buildBucketRowId } from "./reconciliationBuckets";
 
+const SHARED_ROW_METADATA = new Set([
+  "group_id",
+  "match_group",
+  "match_condition",
+]);
+
 export const filterData = (
   postfix: string,
   data: any[],
@@ -39,7 +45,6 @@ export const splitData = (
 ): { cbl: any[]; insurer: any[] } => {
   const cbl: any[] = [];
   const insurer: any[] = [];
-
   data.forEach((row, index) => {
     const cblRow: Record<string, any> = {};
     const insurerRow: Record<string, any> = {};
@@ -49,6 +54,11 @@ export const splitData = (
         // Remove the _insurer postfix for the insurer object
         const cleanKey = key.replace("_INSURER", "");
         insurerRow[cleanKey] = row[key];
+        insurerRow["idx"] = buildBucketRowId(group, index);
+      } else if (SHARED_ROW_METADATA.has(key)) {
+        cblRow[key] = row[key];
+        insurerRow[key] = row[key];
+        cblRow["idx"] = buildBucketRowId(group, index);
         insurerRow["idx"] = buildBucketRowId(group, index);
       } else {
         // Keep original key for CBL object
@@ -72,6 +82,9 @@ export const mergeData = (cbl: any[], insurer: any[]): any[] => {
     const insurerWithPostfix: Record<string, any> = {};
     if (insurerRow) {
       for (const key in insurerRow) {
+        if (SHARED_ROW_METADATA.has(key)) {
+          continue;
+        }
         if (key !== "idx") {
           // Don't add postfix to idx, replace empty/whitespace strings with 0
           const value =
