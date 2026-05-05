@@ -30,6 +30,7 @@ type MatchableComponentProps = {
   // Regroup props
   regroupTargetIdxs?: string[];
   regroupTargetBucket?: string | null;
+  regroupTargetSide?: "cbl" | "insurer" | null;
   regroupTargetBucketLabel?: string;
   onSetRegroupTarget?: (row: any, bucket: BucketKey, side: "cbl" | "insurer") => void;
   onClearRegroupTarget?: () => void;
@@ -53,6 +54,7 @@ function MatchableComponent({
   onAddRemarks,
   regroupTargetIdxs,
   regroupTargetBucket,
+  regroupTargetSide,
   regroupTargetBucketLabel,
   onSetRegroupTarget,
   onClearRegroupTarget,
@@ -435,8 +437,13 @@ function MatchableComponent({
                   onSetRegroupTarget={(row) => onSetRegroupTarget?.(row, type, "cbl")}
                   onClearRegroupTarget={onClearRegroupTarget}
                   onRegroupToTarget={onRegroupToTarget}
+                  regroupTargetBucket={regroupTargetBucket}
                   regroupTargetBucketLabel={regroupTargetBucketLabel}
                   isRegroupTargetInThisBucket={regroupTargetBucket === type}
+                  isRegroupTargetOnThisSide={
+                    regroupTargetSide === "cbl" ||
+                    (regroupTargetBucket === type && type !== "no-match")
+                  }
                 />
               </div>
             </div>
@@ -505,8 +512,13 @@ function MatchableComponent({
                   onSetRegroupTarget={(row) => onSetRegroupTarget?.(row, type, "insurer")}
                   onClearRegroupTarget={onClearRegroupTarget}
                   onRegroupToTarget={onRegroupToTarget}
+                  regroupTargetBucket={regroupTargetBucket}
                   regroupTargetBucketLabel={regroupTargetBucketLabel}
                   isRegroupTargetInThisBucket={regroupTargetBucket === type}
+                  isRegroupTargetOnThisSide={
+                    regroupTargetSide === "insurer" ||
+                    (regroupTargetBucket === type && type !== "no-match")
+                  }
                 />
               </div>
             </div>

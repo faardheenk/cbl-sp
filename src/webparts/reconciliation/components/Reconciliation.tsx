@@ -281,9 +281,10 @@ function applyRegroupMatchHistory(
     .reduce<BucketStateByKey>((state, entry) => {
       const source = state[entry.fromBucket];
       const target = state[entry.targetBucket];
-      if (!source || !target || entry.fromBucket === entry.targetBucket) {
+      if (!source || !target) {
         return state;
       }
+      const isSameBucketRegroup = entry.fromBucket === entry.targetBucket;
 
       const targetCblRows = getRowsByFingerprints(
         target.cbl,
@@ -345,7 +346,7 @@ function applyRegroupMatchHistory(
         ],
       );
       const nextTargetWithoutGroup = removeRowsAndOppositeSpacers(
-        target,
+        isSameBucketRegroup ? nextSource : target,
         entry.targetCblFingerprints,
         entry.targetInsurerFingerprints,
       );
@@ -385,19 +386,30 @@ function applyRegroupMatchHistory(
       }
 
       const nextNoMatch = state["no-match"] || { cbl: [], insurer: [] };
-      const nextState = {
-        ...state,
-        [entry.fromBucket]: {
-          cbl: isMatchedBucket(entry.fromBucket)
-            ? repairParallelMatchedInsurerIndices(nextSource.cbl)
-            : nextSource.cbl,
-          insurer: nextSource.insurer,
-        },
-        [entry.targetBucket]: {
-          cbl: [...nextTargetWithoutGroup.cbl, ...mergedCblRows],
-          insurer: [...nextTargetWithoutGroup.insurer, ...mergedInsurerRows],
-        },
-      };
+      const nextState = isSameBucketRegroup
+        ? {
+            ...state,
+            [entry.targetBucket]: {
+              cbl: [...nextTargetWithoutGroup.cbl, ...mergedCblRows],
+              insurer: [...nextTargetWithoutGroup.insurer, ...mergedInsurerRows],
+            },
+          }
+        : {
+            ...state,
+            [entry.fromBucket]: {
+              cbl: isMatchedBucket(entry.fromBucket)
+                ? repairParallelMatchedInsurerIndices(nextSource.cbl)
+                : nextSource.cbl,
+              insurer: nextSource.insurer,
+            },
+            [entry.targetBucket]: {
+              cbl: [...nextTargetWithoutGroup.cbl, ...mergedCblRows],
+              insurer: [
+                ...nextTargetWithoutGroup.insurer,
+                ...mergedInsurerRows,
+              ],
+            },
+          };
 
       if (orphanedCblRows.length > 0 || orphanedInsurerRows.length > 0) {
         nextState["no-match"] = {
@@ -691,47 +703,45 @@ function Reconciliation() {
           insurerRowIndices || [],
         );
 
-        // For regroup: also undo orphaned rows that were moved to no-match
-        if (action.actionType === "regroup") {
-          const {
-            orphanedCblRows,
-            orphanedInsurerRows,
-            orphanedCblRowIndices,
-            orphanedInsurerRowIndices,
-          } = action;
-          if (
-            (orphanedCblRows && orphanedCblRows.length > 0) ||
-            (orphanedInsurerRows && orphanedInsurerRows.length > 0)
-          ) {
-            // Remove orphaned rows from no-match
-            const noMatchRows = getCurrentBucketRows("no-match");
-            if (orphanedCblRows && orphanedCblRows.length > 0) {
-              noMatchRows.cbl = removeRowsByMatch(
-                noMatchRows.cbl,
-                orphanedCblRows,
-              );
-            }
-            if (orphanedInsurerRows && orphanedInsurerRows.length > 0) {
-              noMatchRows.insurer = removeRowsByMatch(
-                noMatchRows.insurer,
-                orphanedInsurerRows,
-              );
-            }
-            // Restore orphaned rows back to source
-            if (orphanedCblRows && orphanedCblRows.length > 0) {
-              sourceRows.cbl = insertRowsAtIndices(
-                sourceRows.cbl,
-                orphanedCblRows,
-                orphanedCblRowIndices || [],
-              );
-            }
-            if (orphanedInsurerRows && orphanedInsurerRows.length > 0) {
-              sourceRows.insurer = insertRowsAtIndices(
-                sourceRows.insurer,
-                orphanedInsurerRows,
-                orphanedInsurerRowIndices || [],
-              );
-            }
+        // Also undo counterpart rows that were moved to no-match.
+        const {
+          orphanedCblRows,
+          orphanedInsurerRows,
+          orphanedCblRowIndices,
+          orphanedInsurerRowIndices,
+        } = action;
+        if (
+          (orphanedCblRows && orphanedCblRows.length > 0) ||
+          (orphanedInsurerRows && orphanedInsurerRows.length > 0)
+        ) {
+          // Remove orphaned rows from no-match
+          const noMatchRows = getCurrentBucketRows("no-match");
+          if (orphanedCblRows && orphanedCblRows.length > 0) {
+            noMatchRows.cbl = removeRowsByMatch(
+              noMatchRows.cbl,
+              orphanedCblRows,
+            );
+          }
+          if (orphanedInsurerRows && orphanedInsurerRows.length > 0) {
+            noMatchRows.insurer = removeRowsByMatch(
+              noMatchRows.insurer,
+              orphanedInsurerRows,
+            );
+          }
+          // Restore orphaned rows back to source
+          if (orphanedCblRows && orphanedCblRows.length > 0) {
+            sourceRows.cbl = insertRowsAtIndices(
+              sourceRows.cbl,
+              orphanedCblRows,
+              orphanedCblRowIndices || [],
+            );
+          }
+          if (orphanedInsurerRows && orphanedInsurerRows.length > 0) {
+            sourceRows.insurer = insertRowsAtIndices(
+              sourceRows.insurer,
+              orphanedInsurerRows,
+              orphanedInsurerRowIndices || [],
+            );
           }
         }
       });
@@ -966,7 +976,7 @@ function Reconciliation() {
       actionType: "moveToExact" | "moveToPartial" | "unmatch" | "moveToBucket",
       remarks?: string,
     ) => {
-      if (selectedRowCBL.length === 0 || selectedRowInsurer.length === 0) {
+      if (selectedRowCBL.length === 0 && selectedRowInsurer.length === 0) {
         return;
       }
 
@@ -976,11 +986,17 @@ function Reconciliation() {
 
       // Determine source section
       const findSourceSection = (): BucketKey | null =>
-        getAllBucketKeys().find((bucketKey) =>
-          getBucketRows(bucketKey).cbl.some((row) =>
-            selectedRowCBL.some((selected) => selected.idx === row.idx),
-          ),
-        ) || null;
+        getAllBucketKeys().find((bucketKey) => {
+          const bucketRows = getBucketRows(bucketKey);
+          return (
+            bucketRows.cbl.some((row) =>
+              selectedRowCBL.some((selected) => selected.idx === row.idx),
+            ) ||
+            bucketRows.insurer.some((row) =>
+              selectedRowInsurer.some((selected) => selected.idx === row.idx),
+            )
+          );
+        }) || null;
 
       const fromSection = findSourceSection();
       if (!fromSection) {
@@ -1000,6 +1016,52 @@ function Reconciliation() {
       const isRowSelected = (row: any, selectedRows: any[]): boolean => {
         return selectedRows.some((selected) => selected.idx === row.idx);
       };
+
+      const selectedCblIds = new Set(selectedRowCBL.map((row) => row.idx));
+      const selectedInsurerIds = new Set(
+        selectedRowInsurer.map((row) => row.idx),
+      );
+
+      const cleanRowsForNoMatch = (rows: any[]) =>
+        rows.map((row) => {
+          const {
+            match_group: _matchGroup,
+            match_condition: _matchCondition,
+            group_id: _groupId,
+            matched_insurer_indices: _matchedInsurerIndices,
+            ...rest
+          } = row;
+          return rest;
+        });
+
+      const findCounterpartInsurerPositions = (cblRow: any): number[] => {
+        const targetIds = getTargetInsurerRowIdsForCblRow(
+          cblRow,
+          source.cbl,
+          source.insurer,
+        );
+
+        return Array.from(
+          new Set(
+            targetIds
+              .map((idx) => source.insurer.findIndex((row) => row.idx === idx))
+              .filter((index) => index !== -1),
+          ),
+        );
+      };
+
+      const findCounterpartCblPositions = (insurerRow: any): number[] =>
+        source.cbl
+          .map((cblRow, index) => ({
+            index,
+            targetIds: getTargetInsurerRowIdsForCblRow(
+              cblRow,
+              source.cbl,
+              source.insurer,
+            ),
+          }))
+          .filter((entry) => entry.targetIds.includes(insurerRow.idx))
+          .map((entry) => entry.index);
 
       // Helper to find the range of indices to move (including blank rows for equalization)
       const findEqualizedRange = (
@@ -1029,6 +1091,46 @@ function Reconciliation() {
       let rowsToMoveInsurer: any[];
       let cblRowIndices: number[] = [];
       let insurerRowIndices: number[] = [];
+      const orphanedCblRows: any[] = [];
+      const orphanedInsurerRows: any[] = [];
+      const orphanedCblRowIndices: number[] = [];
+      const orphanedInsurerRowIndices: number[] = [];
+
+      if (isMatchedBucket(fromSection)) {
+        if (selectedRowCBL.length > 0 && selectedRowInsurer.length === 0) {
+          selectedRowCBL.forEach((cblRow) => {
+            findCounterpartInsurerPositions(cblRow).forEach((position) => {
+              const insurerRow = source.insurer[position];
+              if (
+                insurerRow &&
+                !isBlankRow(insurerRow) &&
+                !selectedInsurerIds.has(insurerRow.idx) &&
+                !orphanedInsurerRows.some((row) => row.idx === insurerRow.idx)
+              ) {
+                orphanedInsurerRows.push(insurerRow);
+                orphanedInsurerRowIndices.push(position);
+              }
+            });
+          });
+        }
+
+        if (selectedRowInsurer.length > 0 && selectedRowCBL.length === 0) {
+          selectedRowInsurer.forEach((insurerRow) => {
+            findCounterpartCblPositions(insurerRow).forEach((position) => {
+              const cblRow = source.cbl[position];
+              if (
+                cblRow &&
+                !isBlankRow(cblRow) &&
+                !selectedCblIds.has(cblRow.idx) &&
+                !orphanedCblRows.some((row) => row.idx === cblRow.idx)
+              ) {
+                orphanedCblRows.push(cblRow);
+                orphanedCblRowIndices.push(position);
+              }
+            });
+          });
+        }
+      }
 
       if (fromSection === "exact") {
         // For exact matches, only remove rows that are actually selected
@@ -1042,6 +1144,7 @@ function Reconciliation() {
 
         // Find CBL rows to remove - ONLY rows that are actually selected
         const rowsToRemoveCBL = new Set<number>();
+        orphanedCblRowIndices.forEach((index) => rowsToRemoveCBL.add(index));
         selectedRowCBL.forEach((selectedRow: any) => {
           const selectedIndex = source.cbl.findIndex(
             (row) => row.idx === selectedRow.idx,
@@ -1055,6 +1158,9 @@ function Reconciliation() {
         // Handle one-to-many relationships: if a selected CBL row has multiple matches,
         // only remove the corresponding insurer rows that are also selected
         const rowsToRemoveInsurer = new Set<number>();
+        orphanedInsurerRowIndices.forEach((index) =>
+          rowsToRemoveInsurer.add(index),
+        );
 
         selectedRowCBL.forEach((selectedCBLRow: any) => {
           const cblIndex = source.cbl.findIndex(
@@ -1192,7 +1298,11 @@ function Reconciliation() {
         let cblRangeToMove: number[] = [];
         let insurerRangeToMove: number[] = [];
 
-        if (fromSection === "partial") {
+        if (
+          fromSection === "partial" &&
+          selectedCBLIndices.length > 0 &&
+          selectedInsurerIndices.length > 0
+        ) {
           // For partial matches, include blank rows in the equalized range
           const cblBaseRange = findEqualizedRange(
             source.cbl,
@@ -1271,6 +1381,12 @@ function Reconciliation() {
         // Remove rows in the range
         const cblIndicesToRemove = new Set(cblRangeToMove);
         const insurerIndicesToRemove = new Set(insurerRangeToMove);
+        orphanedCblRowIndices.forEach((index) =>
+          cblIndicesToRemove.add(index),
+        );
+        orphanedInsurerRowIndices.forEach((index) =>
+          insurerIndicesToRemove.add(index),
+        );
 
         updatedSourceCBL = source.cbl.filter(
           (_, index) => !cblIndicesToRemove.has(index),
@@ -1296,6 +1412,23 @@ function Reconciliation() {
         });
       }
 
+      const orphanedCblIds = new Set(orphanedCblRows.map((row) => row.idx));
+      const orphanedInsurerIds = new Set(
+        orphanedInsurerRows.map((row) => row.idx),
+      );
+      rowsToMoveCBL = rowsToMoveCBL.filter(
+        (row) => !orphanedCblIds.has(row.idx),
+      );
+      rowsToMoveInsurer = rowsToMoveInsurer.filter(
+        (row) => !orphanedInsurerIds.has(row.idx),
+      );
+      cblRowIndices = cblRowIndices.filter(
+        (index) => !orphanedCblRowIndices.includes(index),
+      );
+      insurerRowIndices = insurerRowIndices.filter(
+        (index) => !orphanedInsurerRowIndices.includes(index),
+      );
+
       // Apply remarks to rows before recording history
       if (remarks?.trim()) {
         rowsToMoveCBL = rowsToMoveCBL.map((row) => ({
@@ -1318,6 +1451,10 @@ function Reconciliation() {
         cblRowIndices,
         insurerRowIndices,
         matrixKey,
+        orphanedCblRows,
+        orphanedInsurerRows,
+        orphanedCblRowIndices,
+        orphanedInsurerRowIndices,
       });
 
       // Record match history for cross-session persistence
@@ -1349,6 +1486,12 @@ function Reconciliation() {
           insurerRemarks: insurerFingerprintsWithRows.map(
             (row) => row.Remarks || "",
           ),
+          orphanedCblFingerprints: orphanedCblRows
+            .filter((row) => getCanonicalCblFingerprint(row))
+            .map((row) => getCanonicalCblFingerprint(row)),
+          orphanedInsurerFingerprints: orphanedInsurerRows
+            .filter((row) => getCanonicalInsurerFingerprint(row))
+            .map((row) => getCanonicalInsurerFingerprint(row)),
           targetBucket: toSection,
           fromBucket: fromSection,
           timestamp: new Date().toISOString(),
@@ -1356,8 +1499,44 @@ function Reconciliation() {
         addMatchHistoryEntry(historyEntry);
       }
 
+      const orphanedCblFingerprintsWithRows = orphanedCblRows.filter((row) =>
+        getCanonicalCblFingerprint(row),
+      );
+      const orphanedInsurerFingerprintsWithRows = orphanedInsurerRows.filter(
+        (row) => getCanonicalInsurerFingerprint(row),
+      );
+
+      if (
+        orphanedCblFingerprintsWithRows.length > 0 ||
+        orphanedInsurerFingerprintsWithRows.length > 0
+      ) {
+        addMatchHistoryEntry({
+          actionType: "move",
+          cblFingerprints: orphanedCblFingerprintsWithRows.map((row) =>
+            getCanonicalCblFingerprint(row),
+          ),
+          insurerFingerprints: orphanedInsurerFingerprintsWithRows.map((row) =>
+            getCanonicalInsurerFingerprint(row),
+          ),
+          cblRemarks: orphanedCblFingerprintsWithRows.map(
+            (row) => row.Remarks || "",
+          ),
+          insurerRemarks: orphanedInsurerFingerprintsWithRows.map(
+            (row) => row.Remarks || "",
+          ),
+          targetBucket: "no-match",
+          fromBucket: fromSection,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       // Handle special case: partial to matched buckets (uses manualMatching)
-      if (fromSection === "partial" && isMatchedBucket(toSection)) {
+      if (
+        fromSection === "partial" &&
+        isMatchedBucket(toSection) &&
+        selectedRowCBL.length > 0 &&
+        selectedRowInsurer.length > 0
+      ) {
         // Calculate deselected rows by comparing full group context vs selected rows
         const allCBLRowsInSelectedGroups = new Set<string>();
         const allInsurerRowsInSelectedGroups = new Set<string>();
@@ -1686,25 +1865,36 @@ function Reconciliation() {
         ? rowsToMoveInsurer
         : rowsToMoveInsurer.filter((row) => !isBlankRow(row));
 
-      const rowsWithGroupCBL = addGroupAndCondition(
-        cblRowsToAdd,
-        nextMatchGroup,
-      );
-      const rowsWithGroupInsurer = addGroupAndCondition(
-        insurerRowsToAdd,
-        nextMatchGroup,
-      );
+      const destinationCblRowsToAdd =
+        toSection === "no-match"
+          ? cleanRowsForNoMatch([...cblRowsToAdd, ...orphanedCblRows])
+          : addGroupAndCondition(cblRowsToAdd, nextMatchGroup);
+      const destinationInsurerRowsToAdd =
+        toSection === "no-match"
+          ? cleanRowsForNoMatch([...insurerRowsToAdd, ...orphanedInsurerRows])
+          : addGroupAndCondition(insurerRowsToAdd, nextMatchGroup);
 
       // Add new rows to cleaned destination
       // Note: We don't re-equalize at destination since we're moving an already-equalized group
       let newDestinationCBL = [
         ...destinationCBLBase,
-        ...rowsWithGroupCBL,
+        ...destinationCblRowsToAdd,
       ];
       let newDestinationInsurer = [
         ...destinationInsurerBase,
-        ...rowsWithGroupInsurer,
+        ...destinationInsurerRowsToAdd,
       ];
+
+      if (
+        isMatchedBucket(toSection) &&
+        newDestinationCBL.length !== newDestinationInsurer.length
+      ) {
+        [newDestinationCBL, newDestinationInsurer] = equalizeWorksheetLengths(
+          newDestinationCBL,
+          newDestinationInsurer,
+          nextMatchGroup,
+        );
+      }
 
       if (isMatchedBucket(toSection)) {
         newDestinationCBL =
@@ -1723,6 +1913,32 @@ function Reconciliation() {
 
       setBucketRows(toSection, "cbl", regeneratedDestinationCBL);
       setBucketRows(toSection, "insurer", regeneratedDestinationInsurer);
+
+      if (
+        toSection !== "no-match" &&
+        (orphanedCblRows.length > 0 || orphanedInsurerRows.length > 0)
+      ) {
+        const noMatch = getBucketRows("no-match");
+        setBucketRows(
+          "no-match",
+          "cbl",
+          regenerateIdx(
+            [...noMatch.cbl, ...cleanRowsForNoMatch(orphanedCblRows)],
+            "no-match",
+          ),
+        );
+        setBucketRows(
+          "no-match",
+          "insurer",
+          regenerateIdx(
+            [
+              ...noMatch.insurer,
+              ...cleanRowsForNoMatch(orphanedInsurerRows),
+            ],
+            "no-match",
+          ),
+        );
+      }
 
       // Clear selections
       setSelectedRowCBL([]);
@@ -2297,7 +2513,8 @@ function Reconciliation() {
       const targetRow = regroupTarget.row;
 
       const sourceBucket = getSelectedSourceSection();
-      if (!sourceBucket || sourceBucket === targetBucket) return;
+      if (!sourceBucket) return;
+      const isSameBucketRegroup = sourceBucket === targetBucket;
 
       setChanges(true);
 
@@ -2452,16 +2669,18 @@ function Reconciliation() {
           repairParallelMatchedInsurerIndices(updatedSourceCBL);
       }
 
-      setBucketRows(
-        sourceBucket,
-        "cbl",
-        regenerateIdx(updatedSourceCBL, sourceBucket),
-      );
-      setBucketRows(
-        sourceBucket,
-        "insurer",
-        regenerateIdx(updatedSourceInsurer, sourceBucket),
-      );
+      if (!isSameBucketRegroup) {
+        setBucketRows(
+          sourceBucket,
+          "cbl",
+          regenerateIdx(updatedSourceCBL, sourceBucket),
+        );
+        setBucketRows(
+          sourceBucket,
+          "insurer",
+          regenerateIdx(updatedSourceInsurer, sourceBucket),
+        );
+      }
 
       // --- Build merged group and append to target ---
 
@@ -2512,11 +2731,23 @@ function Reconciliation() {
       }
 
       // Remove target group rows from target bucket
+      const targetCblPositionsToRemove = new Set(targetGroupCblIndices);
+      const targetInsurerPositionsToRemove = new Set(targetGroupInsurerIndices);
+
+      if (isSameBucketRegroup) {
+        cblPositionsToRemove.forEach((index) =>
+          targetCblPositionsToRemove.add(index),
+        );
+        insPositionsToRemove.forEach((index) =>
+          targetInsurerPositionsToRemove.add(index),
+        );
+      }
+
       const targetCblWithout = target.cbl.filter(
-        (_, i) => !targetGroupCblIndices.has(i),
+        (_, i) => !targetCblPositionsToRemove.has(i),
       );
       const targetInsWithout = target.insurer.filter(
-        (_, i) => !targetGroupInsurerIndices.has(i),
+        (_, i) => !targetInsurerPositionsToRemove.has(i),
       );
 
       // Update moved source rows to match target group
@@ -2542,10 +2773,19 @@ function Reconciliation() {
       const targetCblData = targetGroupCbl.filter((r) => !isBlankRow(r));
       const targetInsData = targetGroupInsurer.filter((r) => !isBlankRow(r));
 
-      let equalizedMergedCbl = [...targetCblData, ...updatedCblRowsToMove];
+      const targetCblIds = new Set(targetCblData.map((row) => row.idx));
+      const targetInsurerIds = new Set(targetInsData.map((row) => row.idx));
+      const movedCblRowsForMerge = updatedCblRowsToMove.filter(
+        (row) => !targetCblIds.has(row.idx),
+      );
+      const movedInsurerRowsForMerge = updatedInsurerRowsToMove.filter(
+        (row) => !targetInsurerIds.has(row.idx),
+      );
+
+      let equalizedMergedCbl = [...targetCblData, ...movedCblRowsForMerge];
       let equalizedMergedInsurer = [
         ...targetInsData,
-        ...updatedInsurerRowsToMove,
+        ...movedInsurerRowsForMerge,
       ];
 
       if (
@@ -3146,6 +3386,7 @@ function Reconciliation() {
           actionMenuItems={getActionMenuItemsForSection("exact")}
           regroupTargetIdxs={resolvedRegroupTargetIdxs}
           regroupTargetBucket={regroupTarget?.bucket || null}
+          regroupTargetSide={regroupTarget?.side || null}
           regroupTargetBucketLabel={
             regroupTarget ? getBucketLabel(regroupTarget.bucket) : undefined
           }
@@ -3167,6 +3408,7 @@ function Reconciliation() {
           actionMenuItems={getActionMenuItemsForSection("partial")}
           regroupTargetIdxs={resolvedRegroupTargetIdxs}
           regroupTargetBucket={regroupTarget?.bucket || null}
+          regroupTargetSide={regroupTarget?.side || null}
           regroupTargetBucketLabel={
             regroupTarget ? getBucketLabel(regroupTarget.bucket) : undefined
           }
@@ -3188,6 +3430,7 @@ function Reconciliation() {
           actionMenuItems={getActionMenuItemsForSection("no-match")}
           regroupTargetIdxs={resolvedRegroupTargetIdxs}
           regroupTargetBucket={regroupTarget?.bucket || null}
+          regroupTargetSide={regroupTarget?.side || null}
           regroupTargetBucketLabel={
             regroupTarget ? getBucketLabel(regroupTarget.bucket) : undefined
           }
@@ -3240,6 +3483,7 @@ function Reconciliation() {
               actionMenuItems={getActionMenuItemsForSection(bucket.BucketKey)}
               regroupTargetIdxs={resolvedRegroupTargetIdxs}
               regroupTargetBucket={regroupTarget?.bucket || null}
+              regroupTargetSide={regroupTarget?.side || null}
               regroupTargetBucketLabel={
                 regroupTarget ? getBucketLabel(regroupTarget.bucket) : undefined
               }

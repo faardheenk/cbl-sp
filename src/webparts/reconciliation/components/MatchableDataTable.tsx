@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useRef,
 } from "react";
-import { Table, Button, Tooltip, Input, Dropdown } from "antd";
+import { Table, Button, Tooltip, Input, Dropdown, message } from "antd";
 import type { MenuProps } from "antd";
 import { ColumnsType } from "antd/es/table";
 import { Resizable, ResizeCallbackData } from "react-resizable";
@@ -17,7 +17,6 @@ import {
   MoreOutlined,
   CloseOutlined,
   LinkOutlined,
-  AimOutlined,
 } from "@ant-design/icons";
 import "react-resizable/css/styles.css";
 import { BucketKey } from "../../../utils/reconciliationBuckets";
@@ -255,8 +254,10 @@ type Props = {
   onSetRegroupTarget?: (row: any) => void;
   onClearRegroupTarget?: () => void;
   onRegroupToTarget?: () => void;
+  regroupTargetBucket?: BucketKey | null;
   regroupTargetBucketLabel?: string;
   isRegroupTargetInThisBucket?: boolean;
+  isRegroupTargetOnThisSide?: boolean;
 };
 
 // Resizable title component with hide button
@@ -370,8 +371,10 @@ function MatchableDataTable({
   onSetRegroupTarget,
   onClearRegroupTarget,
   onRegroupToTarget,
+  regroupTargetBucket,
   regroupTargetBucketLabel,
   isRegroupTargetInThisBucket = false,
+  isRegroupTargetOnThisSide = false,
 }: Props) {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [previousDataLength, setPreviousDataLength] = useState<number>(
@@ -718,11 +721,21 @@ function MatchableDataTable({
       const isEmptyRow = record.ProcessedAmount === "";
       if (isEmptyRow) return items;
 
-      items.push({ type: "divider" as const });
-
-      const isThisTheTarget = regroupTargetIdxs.includes(record.idx) && isRegroupTargetInThisBucket;
+      const addDivider = () => {
+        if (items.length === 0) {
+          items.push({ type: "divider" as const });
+        }
+      };
+      const hasRegroupTarget = regroupTargetIdxs.length > 0;
+      const noMatchRegroupMessage =
+        "No Matches cannot be used as a regroup target because CBL and insurer rows are independent there. Use Move to No Match instead.";
+      const isThisTheTarget =
+        regroupTargetIdxs.includes(record.idx) &&
+        isRegroupTargetInThisBucket &&
+        isRegroupTargetOnThisSide;
 
       if (isThisTheTarget) {
+        addDivider();
         items.push({
           key: "clearRegroupTarget",
           label: "Clear Regroup Target",
@@ -732,32 +745,31 @@ function MatchableDataTable({
             onClearRegroupTarget?.();
           },
         });
-      } else if (regroupTargetIdxs.length > 0 && !isRegroupTargetInThisBucket) {
+      } else if (hasRegroupTarget) {
+        addDivider();
         items.push({
           key: "regroupToTarget",
           label: `Group to ${regroupTargetBucketLabel || "Target"}`,
-          icon: <AimOutlined />,
           onClick: (e) => {
             e.domEvent.stopPropagation();
+            if (regroupTargetBucket === "no-match") {
+              message.warning(noMatchRegroupMessage);
+              return;
+            }
             onRegroupToTarget?.();
           },
         });
+      } else if (!hasRegroupTarget) {
+        addDivider();
         items.push({
           key: "setRegroupTarget",
           label: "Set as Regroup Target",
-          icon: <AimOutlined style={{ color: "#faad14" }} />,
           onClick: (e) => {
             e.domEvent.stopPropagation();
-            onSetRegroupTarget?.(record);
-          },
-        });
-      } else {
-        items.push({
-          key: "setRegroupTarget",
-          label: "Set as Regroup Target",
-          icon: <AimOutlined style={{ color: "#faad14" }} />,
-          onClick: (e) => {
-            e.domEvent.stopPropagation();
+            if (sectionType === "no-match") {
+              message.warning(noMatchRegroupMessage);
+              return;
+            }
             onSetRegroupTarget?.(record);
           },
         });
@@ -768,7 +780,10 @@ function MatchableDataTable({
     [
       regroupTargetIdxs,
       isRegroupTargetInThisBucket,
+      isRegroupTargetOnThisSide,
+      regroupTargetBucket,
       regroupTargetBucketLabel,
+      sectionType,
       onSetRegroupTarget,
       onClearRegroupTarget,
       onRegroupToTarget,
@@ -1024,7 +1039,10 @@ function MatchableDataTable({
       const isManuallySelected = manuallySelectedRows.includes(record.idx);
       const wasManuallyDeselected = manuallyDeselectedRows.includes(record.idx);
       const isEmptyRow = Object.values(record).every((value) => value === "");
-      const isRegroupTarget = regroupTargetIdxs.includes(record.idx) && isRegroupTargetInThisBucket;
+      const isRegroupTarget =
+        regroupTargetIdxs.includes(record.idx) &&
+        isRegroupTargetInThisBucket &&
+        isRegroupTargetOnThisSide;
 
       if (isRegroupTarget) {
         return "regroup-target-row";
@@ -1052,6 +1070,7 @@ function MatchableDataTable({
       manuallyDeselectedRows,
       regroupTargetIdxs,
       isRegroupTargetInThisBucket,
+      isRegroupTargetOnThisSide,
     ],
   );
 
