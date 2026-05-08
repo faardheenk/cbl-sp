@@ -184,9 +184,33 @@ function computeRegroupTargetParallelRange(
   return { groupStart, groupEnd, targetIndex };
 }
 
+const getMatchGroupValue = (row: any): string | null => {
+  const value = row?.match_group;
+  if (value === undefined || value === null || value === "") return null;
+  return String(value);
+};
+
+const isDifferentMatchGroup = (left: any, right: any): boolean => {
+  const leftGroupId = getRowGroupId(left);
+  const rightGroupId = getRowGroupId(right);
+
+  if (leftGroupId && rightGroupId) {
+    return leftGroupId !== rightGroupId;
+  }
+
+  const leftMatchGroup = getMatchGroupValue(left);
+  const rightMatchGroup = getMatchGroupValue(right);
+
+  return (
+    !!leftMatchGroup &&
+    !!rightMatchGroup &&
+    leftMatchGroup !== rightMatchGroup
+  );
+};
+
 /**
- * After regroup merge, each non-blank CBL row must own a contiguous parallel span
- * ending at the next CBL data row; offsets are [0..span-1] vs global row index.
+ * After regroup merge, each non-blank CBL row must own only its contiguous
+ * parallel span. Blank spacer rows from later groups must not be absorbed.
  */
 function repairParallelMatchedInsurerIndices(cblRows: any[]): any[] {
   const L = cblRows.length;
@@ -197,7 +221,10 @@ function repairParallelMatchedInsurerIndices(cblRows: any[]): any[] {
     }
     let nextData = L;
     for (let t = r + 1; t < L; t++) {
-      if (!isBlankAmountRow(cblRows[t])) {
+      if (
+        !isBlankAmountRow(cblRows[t]) ||
+        isDifferentMatchGroup(row, cblRows[t])
+      ) {
         nextData = t;
         break;
       }
@@ -1063,6 +1090,37 @@ function Reconciliation() {
           .filter((entry) => entry.targetIds.includes(insurerRow.idx))
           .map((entry) => entry.index);
 
+      const willInsurerRowBeOrphaned = (insurerRow: any): boolean => {
+        const counterpartCblPositions = findCounterpartCblPositions(insurerRow)
+          .filter((position) => {
+            const cblRow = source.cbl[position];
+            return cblRow && !isBlankRow(cblRow);
+          });
+
+        return (
+          counterpartCblPositions.length > 0 &&
+          counterpartCblPositions.every((position) =>
+            selectedCblIds.has(source.cbl[position].idx),
+          )
+        );
+      };
+
+      const willCblRowBeOrphaned = (cblRow: any): boolean => {
+        const counterpartInsurerPositions = findCounterpartInsurerPositions(
+          cblRow,
+        ).filter((position) => {
+          const insurerRow = source.insurer[position];
+          return insurerRow && !isBlankRow(insurerRow);
+        });
+
+        return (
+          counterpartInsurerPositions.length > 0 &&
+          counterpartInsurerPositions.every((position) =>
+            selectedInsurerIds.has(source.insurer[position].idx),
+          )
+        );
+      };
+
       // Helper to find the range of indices to move (including blank rows for equalization)
       const findEqualizedRange = (
         sourceArray: any[],
@@ -1097,39 +1155,37 @@ function Reconciliation() {
       const orphanedInsurerRowIndices: number[] = [];
 
       if (isMatchedBucket(fromSection)) {
-        if (selectedRowCBL.length > 0 && selectedRowInsurer.length === 0) {
-          selectedRowCBL.forEach((cblRow) => {
-            findCounterpartInsurerPositions(cblRow).forEach((position) => {
-              const insurerRow = source.insurer[position];
-              if (
-                insurerRow &&
-                !isBlankRow(insurerRow) &&
-                !selectedInsurerIds.has(insurerRow.idx) &&
-                !orphanedInsurerRows.some((row) => row.idx === insurerRow.idx)
-              ) {
-                orphanedInsurerRows.push(insurerRow);
-                orphanedInsurerRowIndices.push(position);
-              }
-            });
+        selectedRowCBL.forEach((cblRow) => {
+          findCounterpartInsurerPositions(cblRow).forEach((position) => {
+            const insurerRow = source.insurer[position];
+            if (
+              insurerRow &&
+              !isBlankRow(insurerRow) &&
+              !selectedInsurerIds.has(insurerRow.idx) &&
+              willInsurerRowBeOrphaned(insurerRow) &&
+              !orphanedInsurerRows.some((row) => row.idx === insurerRow.idx)
+            ) {
+              orphanedInsurerRows.push(insurerRow);
+              orphanedInsurerRowIndices.push(position);
+            }
           });
-        }
+        });
 
-        if (selectedRowInsurer.length > 0 && selectedRowCBL.length === 0) {
-          selectedRowInsurer.forEach((insurerRow) => {
-            findCounterpartCblPositions(insurerRow).forEach((position) => {
-              const cblRow = source.cbl[position];
-              if (
-                cblRow &&
-                !isBlankRow(cblRow) &&
-                !selectedCblIds.has(cblRow.idx) &&
-                !orphanedCblRows.some((row) => row.idx === cblRow.idx)
-              ) {
-                orphanedCblRows.push(cblRow);
-                orphanedCblRowIndices.push(position);
-              }
-            });
+        selectedRowInsurer.forEach((insurerRow) => {
+          findCounterpartCblPositions(insurerRow).forEach((position) => {
+            const cblRow = source.cbl[position];
+            if (
+              cblRow &&
+              !isBlankRow(cblRow) &&
+              !selectedCblIds.has(cblRow.idx) &&
+              willCblRowBeOrphaned(cblRow) &&
+              !orphanedCblRows.some((row) => row.idx === cblRow.idx)
+            ) {
+              orphanedCblRows.push(cblRow);
+              orphanedCblRowIndices.push(position);
+            }
           });
-        }
+        });
       }
 
       if (fromSection === "exact") {

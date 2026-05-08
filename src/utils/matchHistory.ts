@@ -26,7 +26,9 @@ const serializeMatchHistoryEntries = (entries: MatchHistoryEntry[]) =>
     TargetInsurerFingerprints: JSON.stringify(
       entry.targetInsurerFingerprints || [],
     ),
-    OrphanedCblFingerprints: JSON.stringify(entry.orphanedCblFingerprints || []),
+    OrphanedCblFingerprints: JSON.stringify(
+      entry.orphanedCblFingerprints || [],
+    ),
     OrphanedInsurerFingerprints: JSON.stringify(
       entry.orphanedInsurerFingerprints || [],
     ),

@@ -579,7 +579,9 @@ function MatchableDataTable({
 
       const groupRows = getRowsWithSameGroupId(row, relatedData);
       return groupRows
-        .filter((relatedRow) => relatedRow?.idx && relatedRow?.ProcessedAmount !== "")
+        .filter(
+          (relatedRow) => relatedRow?.idx && relatedRow?.ProcessedAmount !== "",
+        )
         .map((relatedRow) => relatedRow.idx);
     },
     [data, fileType, relatedData],
@@ -993,7 +995,8 @@ function MatchableDataTable({
                 fileType === 1 &&
                 !groupId &&
                 selectedRow &&
-                selectedRow.matched_insurer_indices === row.matched_insurer_indices;
+                selectedRow.matched_insurer_indices ===
+                  row.matched_insurer_indices;
 
               if (shouldMapByGroup || shouldMapByLegacyIndices) {
                 onRowSelection(targetIndices, fileType, selectedIdx, false);

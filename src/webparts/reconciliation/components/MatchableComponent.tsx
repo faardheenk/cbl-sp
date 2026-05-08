@@ -32,7 +32,11 @@ type MatchableComponentProps = {
   regroupTargetBucket?: string | null;
   regroupTargetSide?: "cbl" | "insurer" | null;
   regroupTargetBucketLabel?: string;
-  onSetRegroupTarget?: (row: any, bucket: BucketKey, side: "cbl" | "insurer") => void;
+  onSetRegroupTarget?: (
+    row: any,
+    bucket: BucketKey,
+    side: "cbl" | "insurer",
+  ) => void;
   onClearRegroupTarget?: () => void;
   onRegroupToTarget?: () => void;
 };
@@ -328,7 +332,10 @@ function MatchableComponent({
           setAutoSelectedInsurerRows([...autoSelectedInsurerRows, rowId]);
         }
       }
-      if (dataFile1.some((row) => row.idx === rowId) && !autoSelectedCblRows.includes(rowId)) {
+      if (
+        dataFile1.some((row) => row.idx === rowId) &&
+        !autoSelectedCblRows.includes(rowId)
+      ) {
         setAutoSelectedCblRows([...autoSelectedCblRows, rowId]);
       }
     }
@@ -434,7 +441,9 @@ function MatchableComponent({
                   autoSelectEnabled={autoSelectEnabled}
                   onAutoSelectChange={handleAutoSelectChange}
                   regroupTargetIdxs={regroupTargetIdxs}
-                  onSetRegroupTarget={(row) => onSetRegroupTarget?.(row, type, "cbl")}
+                  onSetRegroupTarget={(row) =>
+                    onSetRegroupTarget?.(row, type, "cbl")
+                  }
                   onClearRegroupTarget={onClearRegroupTarget}
                   onRegroupToTarget={onRegroupToTarget}
                   regroupTargetBucket={regroupTargetBucket}
@@ -509,7 +518,9 @@ function MatchableComponent({
                   onSelectedSubtotalChange={setInsurerSelectedSubtotal}
                   autoSelectEnabled={autoSelectEnabled}
                   regroupTargetIdxs={regroupTargetIdxs}
-                  onSetRegroupTarget={(row) => onSetRegroupTarget?.(row, type, "insurer")}
+                  onSetRegroupTarget={(row) =>
+                    onSetRegroupTarget?.(row, type, "insurer")
+                  }
                   onClearRegroupTarget={onClearRegroupTarget}
                   onRegroupToTarget={onRegroupToTarget}
                   regroupTargetBucket={regroupTargetBucket}

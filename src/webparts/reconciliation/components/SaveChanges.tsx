@@ -43,6 +43,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
     noMatchSum1,
     noMatchSum2,
     actionHistory,
+    clearHistory,
     matchHistoryEntries,
     setMatchHistoryEntries,
     dynamicBuckets,
@@ -55,8 +56,17 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
   const urlParams = new URLSearchParams(window.location.search);
   const insuranceName = urlParams.get("Insurance");
   const date = urlParams.get("Date");
+  const isUndoDisabled = isSaving || actionHistory.length === 0;
+  const undoTooltipContent = isSaving
+    ? "Cannot undo while saving"
+    : actionHistory.length === 0
+      ? "No actions to undo"
+      : `${actionHistory.length} action${
+          actionHistory.length !== 1 ? "s" : ""
+        } available to undo`;
 
   const handleUndoClick = () => {
+    if (isUndoDisabled) return;
     setIsUndoModalOpen(true);
   };
 
@@ -78,13 +88,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
     <>
       <div style={{ display: "flex", gap: "8px" }}>
         <Tooltip
-          content={
-            actionHistory.length === 0
-              ? "No actions to undo"
-              : `${actionHistory.length} action${
-                  actionHistory.length !== 1 ? "s" : ""
-                } available to undo`
-          }
+          content={undoTooltipContent}
           relationship="label"
         >
           <Button
@@ -92,7 +96,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
             size="small"
             className={styles.btn}
             appearance="secondary"
-            disabled={actionHistory.length === 0}
+            disabled={isUndoDisabled}
             onClick={handleUndoClick}
           >
             Undo
@@ -167,6 +171,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
                   context.pageContext.web.serverRelativeUrl,
                 );
                 setMatchHistoryEntries([]);
+                clearHistory();
 
                 dispatchToast(
                   <Toast className="bg-success text-white rounded-3">
