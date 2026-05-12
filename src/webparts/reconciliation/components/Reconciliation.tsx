@@ -57,6 +57,71 @@ function isBlankAmountRow(row: any): boolean {
   );
 }
 
+function createOneSidedSpacerRow(removedRow: any, oppositeRow: any): any {
+  const template = removedRow || oppositeRow || {};
+  const spacer = Object.keys(template).reduce<Record<string, any>>(
+    (acc, key) => {
+      acc[key] = "";
+      return acc;
+    },
+    {},
+  );
+
+  const groupId = getRowGroupId(removedRow) || getRowGroupId(oppositeRow);
+  if (groupId) {
+    spacer.group_id = groupId;
+  }
+
+  const matchGroup = removedRow?.match_group ?? oppositeRow?.match_group;
+  if (matchGroup !== undefined && matchGroup !== null && matchGroup !== "") {
+    spacer.match_group = matchGroup;
+  }
+
+  const matchCondition =
+    removedRow?.match_condition ?? oppositeRow?.match_condition;
+  if (
+    matchCondition !== undefined &&
+    matchCondition !== null &&
+    matchCondition !== ""
+  ) {
+    spacer.match_condition = matchCondition;
+  }
+
+  return spacer;
+}
+
+function removeRowsPreservingOneSidedSpacers(
+  rows: any[],
+  oppositeRows: any[],
+  rowsToRemove: Set<number>,
+  oppositeRowsToRemove: Set<number>,
+): { updatedRows: any[]; rowsToMove: any[]; rowIndices: number[] } {
+  const updatedRows: any[] = [];
+  const rowsToMove: any[] = [];
+  const rowIndices: number[] = [];
+
+  rows.forEach((row, index) => {
+    if (!rowsToRemove.has(index)) {
+      updatedRows.push(row);
+      return;
+    }
+
+    rowsToMove.push(row);
+    rowIndices.push(index);
+
+    const oppositeRow = oppositeRows[index];
+    if (
+      oppositeRow &&
+      !isBlankAmountRow(oppositeRow) &&
+      !oppositeRowsToRemove.has(index)
+    ) {
+      updatedRows.push(createOneSidedSpacerRow(row, oppositeRow));
+    }
+  });
+
+  return { updatedRows, rowsToMove, rowIndices };
+}
+
 /** Prefer stable row id so duplicate policy/amount pairs still resolve to the clicked row */
 function findSideRowIndex(targetSide: any[], targetRow: any): number {
   const idx = targetRow?.idx;
@@ -1308,29 +1373,25 @@ function Reconciliation() {
           }
         });
 
-        // Filter out rows to remove
-        updatedSourceCBL = source.cbl.filter(
-          (_, index) => !finalRowsToRemoveCBL.has(index),
+        const cblRemoval = removeRowsPreservingOneSidedSpacers(
+          source.cbl,
+          source.insurer,
+          finalRowsToRemoveCBL,
+          finalRowsToRemoveInsurer,
         );
-        updatedSourceInsurer = source.insurer.filter(
-          (_, index) => !finalRowsToRemoveInsurer.has(index),
+        const insurerRemoval = removeRowsPreservingOneSidedSpacers(
+          source.insurer,
+          source.cbl,
+          finalRowsToRemoveInsurer,
+          finalRowsToRemoveCBL,
         );
 
-        // Get rows to move - includes blank rows that were part of equalization
-        rowsToMoveCBL = source.cbl.filter((_, index) => {
-          if (!finalRowsToRemoveCBL.has(index)) {
-            return false;
-          }
-          cblRowIndices.push(index);
-          return true;
-        });
-        rowsToMoveInsurer = source.insurer.filter((_, index) => {
-          if (!finalRowsToRemoveInsurer.has(index)) {
-            return false;
-          }
-          insurerRowIndices.push(index);
-          return true;
-        });
+        updatedSourceCBL = cblRemoval.updatedRows;
+        updatedSourceInsurer = insurerRemoval.updatedRows;
+        rowsToMoveCBL = cblRemoval.rowsToMove;
+        rowsToMoveInsurer = insurerRemoval.rowsToMove;
+        cblRowIndices = cblRemoval.rowIndices;
+        insurerRowIndices = insurerRemoval.rowIndices;
       } else {
         // For partial and no-match, find indices of selected rows
         const selectedCBLIndices: number[] = [];
@@ -1444,28 +1505,50 @@ function Reconciliation() {
           insurerIndicesToRemove.add(index),
         );
 
-        updatedSourceCBL = source.cbl.filter(
-          (_, index) => !cblIndicesToRemove.has(index),
-        );
-        updatedSourceInsurer = source.insurer.filter(
-          (_, index) => !insurerIndicesToRemove.has(index),
-        );
+        const shouldPreserveSourceSpacers = isMatchedBucket(fromSection);
+        if (shouldPreserveSourceSpacers) {
+          const cblRemoval = removeRowsPreservingOneSidedSpacers(
+            source.cbl,
+            source.insurer,
+            cblIndicesToRemove,
+            insurerIndicesToRemove,
+          );
+          const insurerRemoval = removeRowsPreservingOneSidedSpacers(
+            source.insurer,
+            source.cbl,
+            insurerIndicesToRemove,
+            cblIndicesToRemove,
+          );
 
-        // Get rows to move - includes blank rows for partial matches
-        rowsToMoveCBL = source.cbl.filter((_, index) => {
-          if (!cblIndicesToRemove.has(index)) {
-            return false;
-          }
-          cblRowIndices.push(index);
-          return true;
-        });
-        rowsToMoveInsurer = source.insurer.filter((_, index) => {
-          if (!insurerIndicesToRemove.has(index)) {
-            return false;
-          }
-          insurerRowIndices.push(index);
-          return true;
-        });
+          updatedSourceCBL = cblRemoval.updatedRows;
+          updatedSourceInsurer = insurerRemoval.updatedRows;
+          rowsToMoveCBL = cblRemoval.rowsToMove;
+          rowsToMoveInsurer = insurerRemoval.rowsToMove;
+          cblRowIndices = cblRemoval.rowIndices;
+          insurerRowIndices = insurerRemoval.rowIndices;
+        } else {
+          updatedSourceCBL = source.cbl.filter(
+            (_, index) => !cblIndicesToRemove.has(index),
+          );
+          updatedSourceInsurer = source.insurer.filter(
+            (_, index) => !insurerIndicesToRemove.has(index),
+          );
+
+          rowsToMoveCBL = source.cbl.filter((_, index) => {
+            if (!cblIndicesToRemove.has(index)) {
+              return false;
+            }
+            cblRowIndices.push(index);
+            return true;
+          });
+          rowsToMoveInsurer = source.insurer.filter((_, index) => {
+            if (!insurerIndicesToRemove.has(index)) {
+              return false;
+            }
+            insurerRowIndices.push(index);
+            return true;
+          });
+        }
       }
 
       const orphanedCblIds = new Set(orphanedCblRows.map((row) => row.idx));
@@ -1605,19 +1688,28 @@ function Reconciliation() {
           }
         });
 
-        // Now get ALL CBL rows in those groups (including deselected ones)
+        // Now get ALL non-blank CBL rows in those groups. Spacer rows only
+        // preserve visual/index alignment; they should not prevent insurer rows
+        // from being considered orphaned when all real CBL rows are selected.
         partialMatchCBL.forEach((row) => {
-          if (row.group_id && selectedGroupIds.has(row.group_id)) {
+          if (
+            row.group_id &&
+            selectedGroupIds.has(row.group_id) &&
+            !isBlankRow(row)
+          ) {
             allCBLRowsInSelectedGroups.add(row.idx);
           }
         });
 
-        // Get corresponding insurer rows from matched_insurer_indices for ALL rows in selected groups
+        // Get corresponding insurer rows by group_id when available. This is
+        // important after one-sided moves insert spacers, because positional
+        // matched_insurer_indices can no longer describe the whole group.
         partialMatchCBL.forEach((cblRow) => {
           if (cblRow.group_id && selectedGroupIds.has(cblRow.group_id)) {
             const targetIdxs = getTargetInsurerRowIdsForCblRow(
               cblRow,
               partialMatchCBL,
+              partialMatchInsurer,
             );
             targetIdxs.forEach((idx) => {
               if (partialMatchInsurer.some((row) => row.idx === idx)) {
@@ -1630,6 +1722,42 @@ function Reconciliation() {
         // Calculate deselected rows (rows in selected groups but not in selectedRowCBL)
         const deselectedCBLRows = Array.from(allCBLRowsInSelectedGroups).filter(
           (idx) => !selectedRowCBL.some((selected) => selected.idx === idx),
+        );
+
+        const fullyMovedGroupIds = new Set<string>();
+        selectedGroupIds.forEach((groupId) => {
+          const realCblRowsInGroup = partialMatchCBL.filter(
+            (row) => row.group_id === groupId && !isBlankRow(row),
+          );
+          if (
+            realCblRowsInGroup.length > 0 &&
+            realCblRowsInGroup.every((row) =>
+              selectedRowCBL.some((selected) => selected.idx === row.idx),
+            )
+          ) {
+            fullyMovedGroupIds.add(groupId);
+          }
+        });
+
+        const fullyMovedGroupCblSpacerIds = new Set(
+          partialMatchCBL
+            .filter(
+              (row) =>
+                row.group_id &&
+                fullyMovedGroupIds.has(row.group_id) &&
+                isBlankRow(row),
+            )
+            .map((row) => row.idx),
+        );
+        const fullyMovedGroupInsurerSpacerIds = new Set(
+          partialMatchInsurer
+            .filter(
+              (row) =>
+                row.group_id &&
+                fullyMovedGroupIds.has(row.group_id) &&
+                isBlankRow(row),
+            )
+            .map((row) => row.idx),
         );
 
         // For insurer, deselected rows are any rows in selected groups
@@ -1766,6 +1894,12 @@ function Reconciliation() {
           partialMatchInsurer,
           insurerRange.min,
           extendedMaxInsurer,
+        );
+        fullyMovedGroupCblSpacerIds.forEach((idx) =>
+          blankRowsToRemoveCBL.add(idx),
+        );
+        fullyMovedGroupInsurerSpacerIds.forEach((idx) =>
+          blankRowsToRemoveInsurer.add(idx),
         );
 
         // Step 4: Remove identified blank rows from updated arrays

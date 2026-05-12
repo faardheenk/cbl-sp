@@ -13,7 +13,10 @@ const RESERVED_SHEET_NAMES = new Set([
   "_BucketConfig",
 ]);
 
-const createUniqueSheetName = (baseName: string, usedSheetNames: Set<string>): string => {
+const createUniqueSheetName = (
+  baseName: string,
+  usedSheetNames: Set<string>,
+): string => {
   const normalizedBaseName = normalizeBucketSheetName(baseName);
 
   if (!usedSheetNames.has(normalizedBaseName)) {
@@ -37,6 +40,37 @@ const createUniqueSheetName = (baseName: string, usedSheetNames: Set<string>): s
   const fallbackSheetName = `${normalizedBaseName.slice(0, 27)}-${Date.now().toString().slice(-3)}`;
   usedSheetNames.add(fallbackSheetName);
   return fallbackSheetName;
+};
+
+const getNumericValue = (value: unknown): number => {
+  const numericValue = Number(value);
+  return Number.isNaN(numericValue) ? 0 : numericValue;
+};
+
+const hasNonBlankAmount = (row: any, amountKey: string): boolean => {
+  const value = row?.[amountKey];
+  return value !== undefined && value !== null && value !== "";
+};
+
+const countRowsWithAmount = (rows: any[], amountKey: string): number =>
+  rows.filter((row) => hasNonBlankAmount(row, amountKey)).length;
+
+const sumRowsByAmount = (rows: any[], amountKey: string): number =>
+  rows.reduce((sum, row) => sum + getNumericValue(row?.[amountKey]), 0);
+
+const countInsurerRows = (rows: any[]): number =>
+  rows.filter(
+    (row) =>
+      hasNonBlankAmount(row, "ProcessedAmount_INSURER") ||
+      hasNonBlankAmount(row, "ProcessedAmount"),
+  ).length;
+
+type SummaryRow = {
+  Details: string;
+  "No of tran CBL": number;
+  CBL: number;
+  Diff: number;
+  [key: string]: string | number;
 };
 
 export const exportReport = (
@@ -63,26 +97,44 @@ export const exportReport = (
     ),
   }));
 
-  const dynamicSummaryRows = dynamicBuckets.map((bucket) => {
+  const dynamicSummaryRows: SummaryRow[] = dynamicBuckets.map((bucket) => {
     const bucketRows = dynamicBucketSheets[bucket.BucketKey] || [];
-    const cblSum = bucketRows.reduce(
-      (sum, row) => sum + (Number(row.ProcessedAmount) || 0),
-      0,
+    const cblCount = countRowsWithAmount(bucketRows, "ProcessedAmount");
+    const insurerCount = countRowsWithAmount(
+      bucketRows,
+      "ProcessedAmount_INSURER",
     );
-    const insurerSum = bucketRows.reduce(
-      (sum, row) => sum + (Number(row.ProcessedAmount_INSURER) || 0),
-      0,
-    );
+    const cblSum = sumRowsByAmount(bucketRows, "ProcessedAmount");
+    const insurerSum = sumRowsByAmount(bucketRows, "ProcessedAmount_INSURER");
 
     return {
       Details: bucket.BucketName,
-      "No of tran CBL": bucketRows.length,
+      "No of tran CBL": cblCount,
       CBL: cblSum,
-      [`No of tran ${insuranceName}`]: bucketRows.length,
+      [`No of tran ${insuranceName}`]: insurerCount,
       [insuranceName]: insurerSum,
-      Diff: cblSum - insurerSum,
+      Diff: cblSum + insurerSum,
     };
   });
+
+  const exactMatchCblCount = countRowsWithAmount(
+    exactMatches,
+    "ProcessedAmount",
+  );
+  const exactMatchInsurerCount = countRowsWithAmount(
+    exactMatches,
+    "ProcessedAmount_INSURER",
+  );
+  const partialMatchCblCount = countRowsWithAmount(
+    partialMatches,
+    "ProcessedAmount",
+  );
+  const partialMatchInsurerCount = countRowsWithAmount(
+    partialMatches,
+    "ProcessedAmount_INSURER",
+  );
+  const noMatchCblCount = countRowsWithAmount(noMatchesCBL, "ProcessedAmount");
+  const noMatchInsurerCount = countInsurerRows(noMatchesInsurer);
 
   // Create a new workbook
   const workbook = XLSX.utils.book_new();
@@ -91,35 +143,35 @@ export const exportReport = (
   const summaryData = [
     {
       Details: "Exact Match",
-      "No of tran CBL": exactMatches.length,
+      "No of tran CBL": exactMatchCblCount,
       CBL: exactMatchSumCBL,
-      [`No of tran ${insuranceName}`]: exactMatches.length,
+      [`No of tran ${insuranceName}`]: exactMatchInsurerCount,
       [insuranceName]: exactMatchSumInsurer,
-      Diff: exactMatchSumCBL - exactMatchSumInsurer,
+      Diff: exactMatchSumCBL + exactMatchSumInsurer,
     },
     {
-      Details: "Match With Diff",
-      "No of tran CBL": partialMatches.length,
+      Details: "Partial Matches",
+      "No of tran CBL": partialMatchCblCount,
       CBL: partialMatchSumCBL,
-      [`No of tran ${insuranceName}`]: partialMatches.length,
+      [`No of tran ${insuranceName}`]: partialMatchInsurerCount,
       [insuranceName]: partialMatchSumInsurer,
-      Diff: partialMatchSumCBL - partialMatchSumInsurer,
+      Diff: partialMatchSumCBL + partialMatchSumInsurer,
     },
     {
       Details: "Not Found",
-      "No of tran CBL": noMatchesCBL.length,
+      "No of tran CBL": noMatchCblCount,
       CBL: noMatchSumCBL,
-      [`No of tran ${insuranceName}`]: noMatchesInsurer.length,
+      [`No of tran ${insuranceName}`]: noMatchInsurerCount,
       [insuranceName]: noMatchSumInsurer,
-      Diff: noMatchSumCBL - noMatchSumInsurer,
+      Diff: noMatchSumCBL + noMatchSumInsurer,
     },
     ...dynamicSummaryRows,
     {
       Details: "Total",
       "No of tran CBL":
-        exactMatches.length +
-        partialMatches.length +
-        noMatchesCBL.length +
+        exactMatchCblCount +
+        partialMatchCblCount +
+        noMatchCblCount +
         dynamicSummaryRows.reduce((sum, row) => sum + row["No of tran CBL"], 0),
       CBL:
         exactMatchSumCBL +
@@ -127,23 +179,29 @@ export const exportReport = (
         noMatchSumCBL +
         dynamicSummaryRows.reduce((sum, row) => sum + row.CBL, 0),
       [`No of tran ${insuranceName}`]:
-        exactMatches.length +
-        partialMatches.length +
-        noMatchesInsurer.length +
+        exactMatchInsurerCount +
+        partialMatchInsurerCount +
+        noMatchInsurerCount +
         dynamicSummaryRows.reduce(
-          (sum, row) => sum + row[`No of tran ${insuranceName}`],
+          (sum, row) =>
+            sum + getNumericValue(row[`No of tran ${insuranceName}`]),
           0,
         ),
       [insuranceName]:
         exactMatchSumInsurer +
         partialMatchSumInsurer +
         noMatchSumInsurer +
-        dynamicSummaryRows.reduce((sum, row) => sum + row[insuranceName], 0),
+        dynamicSummaryRows.reduce(
+          (sum, row) => sum + getNumericValue(row[insuranceName]),
+          0,
+        ),
       Diff:
-        exactMatchSumCBL -
+        exactMatchSumCBL +
         exactMatchSumInsurer +
-        (partialMatchSumCBL - partialMatchSumInsurer) +
-        (noMatchSumCBL - noMatchSumInsurer) +
+        partialMatchSumCBL +
+        partialMatchSumInsurer +
+        noMatchSumCBL +
+        noMatchSumInsurer +
         dynamicSummaryRows.reduce((sum, row) => sum + row.Diff, 0),
     },
   ];
@@ -161,13 +219,13 @@ export const exportReport = (
   XLSX.utils.book_append_sheet(
     workbook,
     partialMatchesSheet,
-    "Partial Matches"
+    "Partial Matches",
   );
   XLSX.utils.book_append_sheet(workbook, noMatchesCBLSheet, "No Matches CBL");
   XLSX.utils.book_append_sheet(
     workbook,
     noMatchesInsurerSheet,
-    `No Matches Insurer`
+    `No Matches Insurer`,
   );
 
   exportDynamicBuckets.forEach((bucket) => {
