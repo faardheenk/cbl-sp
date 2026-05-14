@@ -1818,34 +1818,10 @@ function Reconciliation() {
         // Key insight: equalizeWorksheetLengths adds blank rows at the END of shorter arrays
         // So blank rows for a group appear consecutively after the group's data rows
 
-        // Step 1: Find original positions and range of moved rows
-        const findMovedRange = (selectedRows: any[], sourceArray: any[]) => {
-          const indices: number[] = [];
-          selectedRows.forEach((selectedRow) => {
-            const index = sourceArray.findIndex(
-              (row) => row.idx === selectedRow.idx,
-            );
-            if (index !== -1) indices.push(index);
-          });
-          if (indices.length === 0) return { min: -1, max: -1 };
-          return { min: Math.min(...indices), max: Math.max(...indices) };
-        };
-
-        const allGroupCBLRowRefs = Array.from(allCBLRowsInSelectedGroups).map(
-          (idx) => ({ idx }),
-        );
-        const allGroupInsurerRowRefs = Array.from(
-          allInsurerRowsInSelectedGroups,
-        ).map((idx) => ({ idx }));
-
-        const cblRange = findMovedRange(allGroupCBLRowRefs, partialMatchCBL);
-        const insurerRange = findMovedRange(
-          allGroupInsurerRowRefs,
-          partialMatchInsurer,
-        );
-
-        // Step 2: Extend range to include trailing blank rows (added for equalization)
-        // Helper: extend range to include consecutive blank rows immediately following
+        // Step 1+2: Compute per-group ranges (with trailing blanks) instead
+        // of one broad min..max across all selected groups. A single range
+        // would sweep spacers from unrelated groups sitting between two
+        // selected groups on different pages.
         const extendRangeToIncludeTrailingBlanks = (
           maxIndex: number,
           sourceArray: any[],
@@ -1853,48 +1829,60 @@ function Reconciliation() {
           let extendedMax = maxIndex;
           for (let i = maxIndex + 1; i < sourceArray.length; i++) {
             if (isBlankRow(sourceArray[i])) {
-              extendedMax = i; // Include this consecutive blank row
+              extendedMax = i;
             } else {
-              break; // Hit non-blank row - stop extending
+              break;
             }
           }
           return extendedMax;
         };
 
-        const extendedMaxCBL = extendRangeToIncludeTrailingBlanks(
-          cblRange.max,
-          partialMatchCBL,
-        );
-        const extendedMaxInsurer = extendRangeToIncludeTrailingBlanks(
-          insurerRange.max,
-          partialMatchInsurer,
-        );
-
-        // Step 3: Identify blank rows in extended range to remove
+        // Step 3: Collect blank rows per-group to avoid sweeping spacers from
+        // unrelated groups that sit between two selected groups (cross-page).
         const collectBlankRowsInRange = (
           sourceArray: any[],
           minIndex: number,
           maxIndex: number,
-        ): Set<string> => {
-          const blankRowIds = new Set<string>();
+          target: Set<string>,
+        ): void => {
           for (let i = minIndex; i <= maxIndex; i++) {
             if (i < sourceArray.length && isBlankRow(sourceArray[i])) {
-              blankRowIds.add(sourceArray[i].idx);
+              target.add(sourceArray[i].idx);
             }
           }
-          return blankRowIds;
         };
 
-        const blankRowsToRemoveCBL = collectBlankRowsInRange(
-          partialMatchCBL,
-          cblRange.min,
-          extendedMaxCBL,
-        );
-        const blankRowsToRemoveInsurer = collectBlankRowsInRange(
-          partialMatchInsurer,
-          insurerRange.min,
-          extendedMaxInsurer,
-        );
+        const blankRowsToRemoveCBL = new Set<string>();
+        const blankRowsToRemoveInsurer = new Set<string>();
+
+        selectedGroupIds.forEach((groupId) => {
+          const groupCblIndices: number[] = [];
+          partialMatchCBL.forEach((row, index) => {
+            if (row.group_id === groupId) groupCblIndices.push(index);
+          });
+          if (groupCblIndices.length > 0) {
+            const min = Math.min(...groupCblIndices);
+            const max = extendRangeToIncludeTrailingBlanks(
+              Math.max(...groupCblIndices),
+              partialMatchCBL,
+            );
+            collectBlankRowsInRange(partialMatchCBL, min, max, blankRowsToRemoveCBL);
+          }
+
+          const groupInsurerIndices: number[] = [];
+          partialMatchInsurer.forEach((row, index) => {
+            if (row.group_id === groupId) groupInsurerIndices.push(index);
+          });
+          if (groupInsurerIndices.length > 0) {
+            const min = Math.min(...groupInsurerIndices);
+            const max = extendRangeToIncludeTrailingBlanks(
+              Math.max(...groupInsurerIndices),
+              partialMatchInsurer,
+            );
+            collectBlankRowsInRange(partialMatchInsurer, min, max, blankRowsToRemoveInsurer);
+          }
+        });
+
         fullyMovedGroupCblSpacerIds.forEach((idx) =>
           blankRowsToRemoveCBL.add(idx),
         );

@@ -404,7 +404,7 @@ function MatchableDataTable({
     useState<number>(-1);
 
   // Pagination state - use external if provided, otherwise local
-  const [localPageSize, setLocalPageSize] = useState<number>(50);
+  const [localPageSize, setLocalPageSize] = useState<number>(100);
   const pageSize =
     externalPageSize !== undefined ? externalPageSize : localPageSize;
   const handlePageSizeChange = onPageSizeChange || setLocalPageSize;

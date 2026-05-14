@@ -187,10 +187,12 @@ function MatchableComponent({
   const [sharedSearchText, setSharedSearchText] = useState<string>("");
 
   // Shared page size state for cross-table pagination
-  const [sharedPageSize, setSharedPageSize] = useState<number>(50);
+  const [sharedPageSize, setSharedPageSize] = useState<number>(100);
 
-  // Shared current page state for cross-table pagination
-  const [sharedCurrentPage, setSharedCurrentPage] = useState<number>(1);
+  // Independent page state per side so navigating pages on one table
+  // does not force the other table to the same page.
+  const [cblCurrentPage, setCblCurrentPage] = useState<number>(1);
+  const [insurerCurrentPage, setInsurerCurrentPage] = useState<number>(1);
 
   // Auto-select toggle: when enabled, clicking a CBL row auto-selects matching insurer rows
   const [autoSelectEnabled, setAutoSelectEnabled] = useState<boolean>(false);
@@ -424,8 +426,8 @@ function MatchableComponent({
                   onSearchChange={setSharedSearchText}
                   pageSize={sharedPageSize}
                   onPageSizeChange={setSharedPageSize}
-                  currentPage={sharedCurrentPage}
-                  onCurrentPageChange={setSharedCurrentPage}
+                  currentPage={cblCurrentPage}
+                  onCurrentPageChange={setCblCurrentPage}
                   sectionType={type}
                   onUnmatch={onUnmatch}
                   onMoveToExactMatch={onMoveToExactMatch}
@@ -504,8 +506,8 @@ function MatchableComponent({
                   onSearchChange={setSharedSearchText}
                   pageSize={sharedPageSize}
                   onPageSizeChange={setSharedPageSize}
-                  currentPage={sharedCurrentPage}
-                  onCurrentPageChange={setSharedCurrentPage}
+                  currentPage={insurerCurrentPage}
+                  onCurrentPageChange={setInsurerCurrentPage}
                   sectionType={type}
                   onUnmatch={onUnmatch}
                   onMoveToExactMatch={onMoveToExactMatch}
