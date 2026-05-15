@@ -1916,7 +1916,7 @@ function Reconciliation() {
         setNoMatchInsurer(regeneratedNoMatchInsurer);
 
         // Add selected rows to the destination matched bucket
-        const nextMatchGroup = getNextMatchGroup(
+        let runningMatchGroup = getNextMatchGroup(
           destination.cbl,
           destination.insurer,
         );
@@ -1929,29 +1929,67 @@ function Reconciliation() {
           ? exactMatchInsurerRows.map((row) => ({ ...row, Remarks: remarks }))
           : exactMatchInsurerRows;
 
-        const exactMatchRowsWithGroupCBL = addGroupAndCondition(
-          remarkedCBLRows,
-          nextMatchGroup,
-        );
-        const exactMatchRowsWithGroupInsurer = addGroupAndCondition(
-          remarkedInsurerRows,
-          nextMatchGroup,
-        );
+        // Group moved rows by original group_id so each group is equalized
+        // independently. Without this, merging all groups into one match_group
+        // loses per-group spacers when group ratios differ.
+        const groupIdsToCbl = new Map<string, any[]>();
+        const groupIdsToInsurer = new Map<string, any[]>();
+
+        remarkedCBLRows.forEach((row) => {
+          const gid = getRowGroupId(row) || "__ungrouped__";
+          if (!groupIdsToCbl.has(gid)) groupIdsToCbl.set(gid, []);
+          groupIdsToCbl.get(gid)!.push(row);
+        });
+        remarkedInsurerRows.forEach((row) => {
+          const gid = getRowGroupId(row) || "__ungrouped__";
+          if (!groupIdsToInsurer.has(gid)) groupIdsToInsurer.set(gid, []);
+          groupIdsToInsurer.get(gid)!.push(row);
+        });
+
+        const allOriginalGroupIds = new Set([
+          ...Array.from(groupIdsToCbl.keys()),
+          ...Array.from(groupIdsToInsurer.keys()),
+        ]);
+
+        let equalizedNewCBL: any[] = [];
+        let equalizedNewInsurer: any[] = [];
+
+        allOriginalGroupIds.forEach((gid) => {
+          const cblGroup = groupIdsToCbl.get(gid) || [];
+          const insurerGroup = groupIdsToInsurer.get(gid) || [];
+
+          const taggedCbl = addGroupAndCondition(cblGroup, runningMatchGroup);
+          const taggedInsurer = addGroupAndCondition(
+            insurerGroup,
+            runningMatchGroup,
+          );
+
+          const [eqCbl, eqInsurer] = equalizeWorksheetLengths(
+            taggedCbl,
+            taggedInsurer,
+            runningMatchGroup,
+          );
+
+          equalizedNewCBL.push(...eqCbl);
+          equalizedNewInsurer.push(...eqInsurer);
+
+          runningMatchGroup = runningMatchGroup % 2 === 0 ? 1 : 2;
+        });
 
         const newMatchedBucketCBL = [
           ...destination.cbl,
-          ...exactMatchRowsWithGroupCBL,
+          ...equalizedNewCBL,
         ];
         const newMatchedBucketInsurer = [
           ...destination.insurer,
-          ...exactMatchRowsWithGroupInsurer,
+          ...equalizedNewInsurer,
         ];
 
         const [equalizedDestinationCBL, equalizedDestinationInsurer] =
           equalizeWorksheetLengths(
             newMatchedBucketCBL,
             newMatchedBucketInsurer,
-            nextMatchGroup,
+            runningMatchGroup,
           );
 
         setBucketRows(
