@@ -395,6 +395,14 @@ function MatchableDataTable({
   const [manuallyDeselectedRowsLocal, setManuallyDeselectedRowsLocal] =
     useState<string[]>([]);
 
+  // Pre-computed Sets for O(1) lookups in hot paths (row rendering, className)
+  const selectedRowsSet = useMemo(() => new Set(selectedRows), [selectedRows]);
+  const externalSelectedRowsSet = useMemo(() => new Set(externalSelectedRows), [externalSelectedRows]);
+  const manuallySelectedRowsSet = useMemo(() => new Set(manuallySelectedRows), [manuallySelectedRows]);
+  const manuallyDeselectedRowsSet = useMemo(() => new Set(manuallyDeselectedRows), [manuallyDeselectedRows]);
+  const manuallyDeselectedRowsLocalSet = useMemo(() => new Set(manuallyDeselectedRowsLocal), [manuallyDeselectedRowsLocal]);
+  const regroupTargetIdxsSet = useMemo(() => new Set(regroupTargetIdxs), [regroupTargetIdxs]);
+
   // Ref for table wrapper to enable scrolling
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const previousExternalSelectedRowsRef = useRef<string[]>([]);
@@ -506,12 +514,9 @@ function MatchableDataTable({
 
   // Update selected rows when external selection changes
   useEffect(() => {
-    // Combine manual selections with external selections
     const newSelectedRows = [...manuallySelectedRows, ...externalSelectedRows];
 
-    // Use functional update to avoid stale closure and compare with previous state
     setSelectedRows((prevSelectedRows) => {
-      // Use Set comparison to avoid sort mutation issues
       const currentSet = new Set(prevSelectedRows);
       const newSet = new Set(newSelectedRows);
 
@@ -519,17 +524,15 @@ function MatchableDataTable({
         currentSet.size === newSet.size &&
         Array.from(currentSet).every((item) => newSet.has(item));
 
-      // Only update if selection actually changed
       if (!setsAreEqual) {
         return newSelectedRows;
       }
       return prevSelectedRows;
     });
 
-    // Update the global selected row data for auto-selected rows
     if (setSelectedRowData) {
       const selectedData = data.filter((row) =>
-        externalSelectedRows.includes(row.idx),
+        externalSelectedRowsSet.has(row.idx),
       );
       const autoSelectedData = selectedData.map((row) => ({
         ...row,
@@ -537,39 +540,22 @@ function MatchableDataTable({
       }));
 
       setSelectedRowData((prevData) => {
-        // Remove any existing auto-selected rows and add new ones
         const manualData = prevData.filter(
           (row) => row.match_condition !== "auto match",
         );
         const newData = [...manualData, ...autoSelectedData];
 
-        // Only update if data actually changed
-        if (JSON.stringify(prevData) !== JSON.stringify(newData)) {
+        if (
+          prevData.length !== newData.length ||
+          newData.some((row, i) => row.idx !== prevData[i]?.idx)
+        ) {
           return newData;
         }
         return prevData;
       });
     }
-  }, [externalSelectedRows, manuallySelectedRows, data, setSelectedRowData]);
+  }, [externalSelectedRows, externalSelectedRowsSet, manuallySelectedRows, data, setSelectedRowData]);
 
-  useEffect(() => {
-    const sideName = fileType === 1 ? "CBL" : "Insurer";
-    const selectedRowObjects = data.filter((row) =>
-      selectedRows.includes(row.idx),
-    );
-    const deselectedRowObjects = data.filter((row) =>
-      manuallyDeselectedRowsLocal.includes(row.idx),
-    );
-
-    console.log(
-      `[Selection Change] ${sideName} Selected Rows:`,
-      selectedRowObjects,
-    );
-    console.log(
-      `[Selection Change] ${sideName} Deselected Rows:`,
-      deselectedRowObjects,
-    );
-  }, [selectedRows, manuallyDeselectedRowsLocal, data, fileType]);
 
   const calculateTargetRowIndices = useCallback(
     (row: any): string[] => {
@@ -732,7 +718,7 @@ function MatchableDataTable({
       const noMatchRegroupMessage =
         "No Matches cannot be used as a regroup target because CBL and insurer rows are independent there. Use Move to No Match instead.";
       const isThisTheTarget =
-        regroupTargetIdxs.includes(record.idx) &&
+        regroupTargetIdxsSet.has(record.idx) &&
         isRegroupTargetInThisBucket &&
         isRegroupTargetOnThisSide;
 
@@ -806,7 +792,7 @@ function MatchableDataTable({
         onClick: (e: React.MouseEvent) => e.stopPropagation(),
       }),
       render: (_: any, record: any) => {
-        const isSelected = selectedRows.includes(record.idx);
+        const isSelected = selectedRowsSet.has(record.idx);
         if (!isSelected) return null;
 
         const baseMenuItems = getActionMenuItems() || [];
@@ -830,7 +816,7 @@ function MatchableDataTable({
         );
       },
     };
-  }, [sectionType, selectedRows, getActionMenuItems, buildRegroupMenuItems]);
+  }, [sectionType, selectedRowsSet, getActionMenuItems, buildRegroupMenuItems]);
 
   // Combine action column with data columns
   const finalColumns = useMemo(() => {
@@ -854,13 +840,13 @@ function MatchableDataTable({
 
   // Calculate subtotal of selected rows
   const selectedRowsSubtotal = useMemo(() => {
-    const selectedData = data.filter((row) => selectedRows.includes(row.idx));
+    const selectedData = data.filter((row) => selectedRowsSet.has(row.idx));
 
     return selectedData.reduce((acc, row) => {
       const amount = parseFloat(row["ProcessedAmount"]) || 0;
       return acc + amount;
     }, 0);
-  }, [selectedRows, data]);
+  }, [selectedRowsSet, data]);
 
   // Notify parent of selected subtotal for cross-table sum (Difference on CBL)
   useEffect(() => {
@@ -878,11 +864,10 @@ function MatchableDataTable({
         return;
       }
 
-      // Check if this row was auto-selected or manually deselected
-      const isAutoSelected = externalSelectedRows.includes(row.idx);
-      const wasManuallyDeselected = manuallyDeselectedRows.includes(row.idx);
-      const isCurrentlySelected = selectedRows.includes(row.idx);
-      const isManuallySelected = manuallySelectedRows.includes(row.idx);
+      const isAutoSelected = externalSelectedRowsSet.has(row.idx);
+      const wasManuallyDeselected = manuallyDeselectedRowsSet.has(row.idx);
+      const isCurrentlySelected = selectedRowsSet.has(row.idx);
+      const isManuallySelected = manuallySelectedRowsSet.has(row.idx);
 
       // Handle special cases first (early returns)
       if (isAutoSelected) {
@@ -938,9 +923,10 @@ function MatchableDataTable({
       }
 
       // Update manual selection state (single update)
+      const toggleSet = new Set(rowsToToggle);
       const newManualSelection = isSelecting
-        ? Array.from(new Set([...manuallySelectedRows, ...rowsToToggle])) // Add rows
-        : manuallySelectedRows.filter((id) => !rowsToToggle.includes(id)); // Remove rows (only the clicked row)
+        ? Array.from(new Set([...manuallySelectedRows, ...rowsToToggle]))
+        : manuallySelectedRows.filter((id) => !toggleSet.has(id));
 
       setManuallySelectedRows(newManualSelection);
 
@@ -954,7 +940,7 @@ function MatchableDataTable({
       } else {
         // Row is being selected - remove from manually deselected list if it was there
         const newManuallyDeselected = manuallyDeselectedRowsLocal.filter(
-          (id) => !rowsToToggle.includes(id),
+          (id) => !toggleSet.has(id),
         );
         setManuallyDeselectedRowsLocal(newManuallyDeselected);
       }
@@ -975,7 +961,7 @@ function MatchableDataTable({
             return [...prev, ...rowsToAdd];
           } else {
             // Remove only the clicked row (not all related rows)
-            return prev.filter((r) => !rowsToToggle.includes(r.idx));
+            return prev.filter((r) => !toggleSet.has(r.idx));
           }
         });
       }
@@ -1017,11 +1003,12 @@ function MatchableDataTable({
       // For Insurer side, onRowSelection updates CBL auto-selection when group_id is available.
     },
     [
-      selectedRows,
+      selectedRowsSet,
       manuallySelectedRows,
-      manuallyDeselectedRows,
+      manuallySelectedRowsSet,
+      manuallyDeselectedRowsSet,
       manuallyDeselectedRowsLocal,
-      externalSelectedRows,
+      externalSelectedRowsSet,
       fileType,
       data,
       setSelectedRowData,
@@ -1037,44 +1024,45 @@ function MatchableDataTable({
   // Function to determine row class name based on row state
   const getRowClassName = useCallback(
     (record: any) => {
-      const isSelected = selectedRows.includes(record.idx);
-      const isAutoSelected = externalSelectedRows.includes(record.idx);
-      const isManuallySelected = manuallySelectedRows.includes(record.idx);
-      const wasManuallyDeselected = manuallyDeselectedRows.includes(record.idx);
-      const isEmptyRow = Object.values(record).every((value) => value === "");
-      const isRegroupTarget =
-        regroupTargetIdxs.includes(record.idx) &&
+      if (
         isRegroupTargetInThisBucket &&
-        isRegroupTargetOnThisSide;
-
-      if (isRegroupTarget) {
+        isRegroupTargetOnThisSide &&
+        regroupTargetIdxsSet.has(record.idx)
+      ) {
         return "regroup-target-row";
       }
-      if (isSelected) {
-        if (isManuallySelected) {
+      if (selectedRowsSet.has(record.idx)) {
+        if (manuallySelectedRowsSet.has(record.idx)) {
           return "selected-row";
-        } else if (isAutoSelected) {
+        } else if (externalSelectedRowsSet.has(record.idx)) {
           return "auto-selected-row";
         }
         return "selected-row";
       }
-      if (wasManuallyDeselected) {
+      if (manuallyDeselectedRowsSet.has(record.idx)) {
         return "manually-deselected-row";
       }
-      if (isEmptyRow) {
+      if (Object.values(record).every((value) => value === "")) {
         return "empty-row";
       }
       return "";
     },
     [
-      selectedRows,
-      externalSelectedRows,
-      manuallySelectedRows,
-      manuallyDeselectedRows,
-      regroupTargetIdxs,
+      selectedRowsSet,
+      externalSelectedRowsSet,
+      manuallySelectedRowsSet,
+      manuallyDeselectedRowsSet,
+      regroupTargetIdxsSet,
       isRegroupTargetInThisBucket,
       isRegroupTargetOnThisSide,
     ],
+  );
+
+  const handleOnRow = useCallback(
+    (row: any) => ({
+      onClick: () => handleRowClicked(row),
+    }),
+    [handleRowClicked],
   );
 
   // Function to navigate to a specific row by ID
@@ -1428,7 +1416,7 @@ function MatchableDataTable({
               </Tooltip>
             </>
           )}
-          {selectedRows.length > 0 && fileType === 1 && (
+          {selectedRows.length > 0 && !(fileType === 2 && autoSelectEnabled && manuallySelectedRows.length === 0) && (
             <Tooltip title="Deselect all selected rows">
               <Button
                 type="default"
@@ -1442,8 +1430,6 @@ function MatchableDataTable({
               </Button>
             </Tooltip>
           )}
-          {/* Spacer for fileType 2 to maintain alignment */}
-          {fileType === 2 && <div style={{ minHeight: "32px" }} />}
         </div>
         {searchText && (
           <span
@@ -1504,9 +1490,7 @@ function MatchableDataTable({
         bordered
         className="consistent-height-table"
         rowClassName={getRowClassName}
-        onRow={(row) => ({
-          onClick: () => handleRowClicked(row),
-        })}
+        onRow={handleOnRow}
         pagination={{
           current: currentPage,
           pageSize: pageSize,

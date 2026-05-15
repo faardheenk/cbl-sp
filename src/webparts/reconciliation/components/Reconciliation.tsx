@@ -968,15 +968,6 @@ function Reconciliation() {
           };
           return acc;
         }, {});
-        console.log("[Initial Render] Exact Match CBL:", exactMatchCBL);
-        console.log("[Initial Render] Exact Match Insurer:", exactMatchInsurer);
-        console.log("[Initial Render] Partial Match CBL:", partialMatchCBL);
-        console.log(
-          "[Initial Render] Partial Match Insurer:",
-          partialMatchInsurer,
-        );
-        console.log("[Initial Render] No Match CBL:", noMatchCBL);
-        console.log("[Initial Render] No Match Insurer:", noMatchInsurer);
         setExactMatchCBL(exactMatchCBL);
         setExactMatchInsurer(exactMatchInsurer);
         setPartialMatchCBL(partialMatchCBL);
@@ -1780,20 +1771,6 @@ function Reconciliation() {
           .map((idx) => partialMatchInsurer.find((row) => row.idx === idx))
           .filter(Boolean);
 
-        console.log("[Selection] Selected CBL rows (objects):", selectedRowCBL);
-        console.log(
-          "[Selection] Selected Insurer rows (objects):",
-          selectedRowInsurer,
-        );
-        console.log(
-          "[Selection] Deselected CBL rows (objects):",
-          deselectedCBLRowObjects,
-        );
-        console.log(
-          "[Selection] Deselected Insurer rows (objects):",
-          deselectedInsurerRowObjects,
-        );
-
         const {
           updatedRowsCBL,
           updatedRowsInsurer,
@@ -1976,15 +1953,6 @@ function Reconciliation() {
             newMatchedBucketInsurer,
             nextMatchGroup,
           );
-
-        console.log(
-          `[Move] Updated ${toSection} CBL:`,
-          equalizedDestinationCBL,
-        );
-        console.log(
-          `[Move] Updated ${toSection} Insurer:`,
-          equalizedDestinationInsurer,
-        );
 
         setBucketRows(
           toSection,

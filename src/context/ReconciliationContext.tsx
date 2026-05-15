@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from "react";
 import { ColumnsType } from "antd/es/table";
 import { MatchHistoryEntry } from "../utils/matchHistory";
 import {
@@ -214,139 +214,135 @@ export const ReconciliationProvider: React.FC<{ children: ReactNode }> = ({
   // Action history for undo functionality
   const [actionHistory, setActionHistory] = useState<ActionHistoryItem[]>([]);
 
-  const addToHistory = (item: Omit<ActionHistoryItem, "id" | "timestamp">) => {
+  const addToHistory = useCallback((item: Omit<ActionHistoryItem, "id" | "timestamp">) => {
     const newItem: ActionHistoryItem = {
       ...item,
       id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       timestamp: new Date(),
     };
     setActionHistory((prev) => [...prev, newItem]);
-  };
+  }, []);
 
-  const removeFromHistory = (ids: string[]) => {
+  const removeFromHistory = useCallback((ids: string[]) => {
     setActionHistory((prev) => prev.filter((item) => !ids.includes(item.id)));
-  };
+  }, []);
 
-  const clearHistory = () => {
+  const clearHistory = useCallback(() => {
     setActionHistory([]);
-  };
+  }, []);
 
   // Match history for cross-session persistence
   const [matchHistoryEntries, setMatchHistoryEntries] = useState<
     MatchHistoryEntry[]
   >([]);
 
-  const addMatchHistoryEntry = (entry: MatchHistoryEntry) => {
+  const addMatchHistoryEntry = useCallback((entry: MatchHistoryEntry) => {
     setMatchHistoryEntries((prev) => [...prev, entry]);
-  };
+  }, []);
 
   // Regroup target
   const [regroupTarget, setRegroupTarget] = useState<RegroupTarget | null>(
     null,
   );
-  const clearRegroupTarget = () => setRegroupTarget(null);
+  const clearRegroupTarget = useCallback(() => setRegroupTarget(null), []);
+
+  const value = useMemo(() => ({
+    exactMatchCBL,
+    setExactMatchCBL,
+    exactMatchInsurer,
+    setExactMatchInsurer,
+    partialMatchCBL,
+    setPartialMatchCBL,
+    partialMatchInsurer,
+    setPartialMatchInsurer,
+    selectedRowCBL,
+    setSelectedRowCBL,
+    selectedRowInsurer,
+    setSelectedRowInsurer,
+    noMatchCBL,
+    setNoMatchCBL,
+    noMatchInsurer,
+    setNoMatchInsurer,
+    dynamicBuckets,
+    setDynamicBuckets,
+    dynamicBucketData,
+    setDynamicBucketData,
+    partialMatchSum1,
+    setPartialMatchSum1,
+    partialMatchSum2,
+    setPartialMatchSum2,
+    noMatchSum1,
+    setNoMatchSum1,
+    noMatchSum2,
+    setNoMatchSum2,
+    exactMatchSum1,
+    setExactMatchSum1,
+    exactMatchSum2,
+    setExactMatchSum2,
+    matrix,
+    setMatrix,
+    isClicked,
+    setIsClicked,
+    uploadSuccess,
+    setUploadSuccess,
+    uploadError,
+    setUploadError,
+    currentManualMatchGroup,
+    setCurrentManualMatchGroup,
+    partialMatchSearch1,
+    setPartialMatchSearch1,
+    partialMatchSearch2,
+    setPartialMatchSearch2,
+    noMatchSearch1,
+    setNoMatchSearch1,
+    noMatchSearch2,
+    setNoMatchSearch2,
+    exactMatchSearch1,
+    setExactMatchSearch1,
+    exactMatchSearch2,
+    setExactMatchSearch2,
+    cblColumns,
+    setCblColumns,
+    insurerColumns,
+    setInsurerColumns,
+    clearAllSelections,
+    setClearAllSelections,
+    actionHistory,
+    setActionHistory,
+    addToHistory,
+    removeFromHistory,
+    clearHistory,
+    matchHistoryEntries,
+    setMatchHistoryEntries,
+    addMatchHistoryEntry,
+    regroupTarget,
+    setRegroupTarget,
+    clearRegroupTarget,
+  }), [
+    exactMatchCBL, exactMatchInsurer,
+    partialMatchCBL, partialMatchInsurer,
+    selectedRowCBL, selectedRowInsurer,
+    noMatchCBL, noMatchInsurer,
+    dynamicBuckets, dynamicBucketData,
+    partialMatchSum1, partialMatchSum2,
+    noMatchSum1, noMatchSum2,
+    exactMatchSum1, exactMatchSum2,
+    matrix,
+    isClicked, uploadSuccess, uploadError,
+    currentManualMatchGroup,
+    partialMatchSearch1, partialMatchSearch2,
+    noMatchSearch1, noMatchSearch2,
+    exactMatchSearch1, exactMatchSearch2,
+    cblColumns, insurerColumns,
+    clearAllSelections,
+    actionHistory,
+    addToHistory, removeFromHistory, clearHistory,
+    matchHistoryEntries, addMatchHistoryEntry,
+    regroupTarget, clearRegroupTarget,
+  ]);
 
   return (
-    <ReconciliationContext.Provider
-      value={{
-        // Exact match states
-        exactMatchCBL,
-        setExactMatchCBL,
-        exactMatchInsurer,
-        setExactMatchInsurer,
-
-        // Partial match states
-        partialMatchCBL,
-        setPartialMatchCBL,
-        partialMatchInsurer,
-        setPartialMatchInsurer,
-
-        // Selected row states
-        selectedRowCBL,
-        setSelectedRowCBL,
-        selectedRowInsurer,
-        setSelectedRowInsurer,
-
-        // No match states
-        noMatchCBL,
-        setNoMatchCBL,
-        noMatchInsurer,
-        setNoMatchInsurer,
-        dynamicBuckets,
-        setDynamicBuckets,
-        dynamicBucketData,
-        setDynamicBucketData,
-
-        // Sum states
-        partialMatchSum1,
-        setPartialMatchSum1,
-        partialMatchSum2,
-        setPartialMatchSum2,
-        noMatchSum1,
-        setNoMatchSum1,
-        noMatchSum2,
-        setNoMatchSum2,
-        exactMatchSum1,
-        setExactMatchSum1,
-        exactMatchSum2,
-        setExactMatchSum2,
-
-        // Matrix
-        matrix,
-        setMatrix,
-
-        // UI states
-        isClicked,
-        setIsClicked,
-        uploadSuccess,
-        setUploadSuccess,
-        uploadError,
-        setUploadError,
-        currentManualMatchGroup,
-        setCurrentManualMatchGroup,
-
-        // Search states
-        partialMatchSearch1,
-        setPartialMatchSearch1,
-        partialMatchSearch2,
-        setPartialMatchSearch2,
-        noMatchSearch1,
-        setNoMatchSearch1,
-        noMatchSearch2,
-        setNoMatchSearch2,
-        exactMatchSearch1,
-        setExactMatchSearch1,
-        exactMatchSearch2,
-        setExactMatchSearch2,
-
-        // Column mapping states
-        cblColumns,
-        setCblColumns,
-        insurerColumns,
-        setInsurerColumns,
-
-        // Clear selections trigger
-        clearAllSelections,
-        setClearAllSelections,
-
-        // Action history for undo functionality
-        actionHistory,
-        setActionHistory,
-        addToHistory,
-        removeFromHistory,
-        clearHistory,
-
-        // Match history for cross-session persistence
-        matchHistoryEntries,
-        setMatchHistoryEntries,
-        addMatchHistoryEntry,
-
-        // Regroup target
-        regroupTarget,
-        setRegroupTarget,
-        clearRegroupTarget,
-      }}
-    >
+    <ReconciliationContext.Provider value={value}>
       {children}
     </ReconciliationContext.Provider>
   );
