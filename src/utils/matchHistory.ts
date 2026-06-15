@@ -17,27 +17,147 @@ export interface MatchHistoryEntry {
   timestamp: string;
 }
 
-const serializeMatchHistoryEntries = (entries: MatchHistoryEntry[]) =>
-  entries.map((entry) => ({
-    ActionType: entry.actionType || "move",
-    CblFingerprints: JSON.stringify(entry.cblFingerprints),
-    InsurerFingerprints: JSON.stringify(entry.insurerFingerprints),
-    TargetCblFingerprints: JSON.stringify(entry.targetCblFingerprints || []),
-    TargetInsurerFingerprints: JSON.stringify(
-      entry.targetInsurerFingerprints || [],
-    ),
-    OrphanedCblFingerprints: JSON.stringify(
-      entry.orphanedCblFingerprints || [],
-    ),
-    OrphanedInsurerFingerprints: JSON.stringify(
-      entry.orphanedInsurerFingerprints || [],
-    ),
-    CblRemarks: JSON.stringify(entry.cblRemarks || []),
-    InsurerRemarks: JSON.stringify(entry.insurerRemarks || []),
-    FromBucket: entry.fromBucket,
-    TargetBucket: entry.targetBucket,
-    Timestamp: entry.timestamp,
-  }));
+const CELL_CHAR_LIMIT = 15000;
+
+const FINGERPRINT_ARRAY_KEYS = [
+  "cblFingerprints",
+  "insurerFingerprints",
+  "targetCblFingerprints",
+  "targetInsurerFingerprints",
+  "orphanedCblFingerprints",
+  "orphanedInsurerFingerprints",
+  "cblRemarks",
+  "insurerRemarks",
+] as const;
+
+const SERIALIZED_KEY_MAP: Record<string, string> = {
+  cblFingerprints: "CblFingerprints",
+  insurerFingerprints: "InsurerFingerprints",
+  targetCblFingerprints: "TargetCblFingerprints",
+  targetInsurerFingerprints: "TargetInsurerFingerprints",
+  orphanedCblFingerprints: "OrphanedCblFingerprints",
+  orphanedInsurerFingerprints: "OrphanedInsurerFingerprints",
+  cblRemarks: "CblRemarks",
+  insurerRemarks: "InsurerRemarks",
+};
+
+type SerializedRow = {
+  ActionType: string;
+  CblFingerprints: string;
+  InsurerFingerprints: string;
+  TargetCblFingerprints: string;
+  TargetInsurerFingerprints: string;
+  OrphanedCblFingerprints: string;
+  OrphanedInsurerFingerprints: string;
+  CblRemarks: string;
+  InsurerRemarks: string;
+  FromBucket: string;
+  TargetBucket: string;
+  Timestamp: string;
+};
+
+const buildRow = (
+  actionType: string,
+  arrays: Record<string, string[]>,
+  entry: MatchHistoryEntry,
+): SerializedRow => ({
+  ActionType: actionType,
+  CblFingerprints: JSON.stringify(arrays.cblFingerprints || []),
+  InsurerFingerprints: JSON.stringify(arrays.insurerFingerprints || []),
+  TargetCblFingerprints: JSON.stringify(arrays.targetCblFingerprints || []),
+  TargetInsurerFingerprints: JSON.stringify(
+    arrays.targetInsurerFingerprints || [],
+  ),
+  OrphanedCblFingerprints: JSON.stringify(arrays.orphanedCblFingerprints || []),
+  OrphanedInsurerFingerprints: JSON.stringify(
+    arrays.orphanedInsurerFingerprints || [],
+  ),
+  CblRemarks: JSON.stringify(arrays.cblRemarks || []),
+  InsurerRemarks: JSON.stringify(arrays.insurerRemarks || []),
+  FromBucket: entry.fromBucket,
+  TargetBucket: entry.targetBucket,
+  Timestamp: entry.timestamp,
+});
+
+const needsSplitting = (row: SerializedRow): boolean =>
+  FINGERPRINT_ARRAY_KEYS.some(
+    (key) =>
+      (row[SERIALIZED_KEY_MAP[key] as keyof SerializedRow] as string).length >
+      CELL_CHAR_LIMIT,
+  );
+
+const STRING_CHUNK_SIZE = CELL_CHAR_LIMIT - 100;
+
+const chunkOversizedStrings = (arr: string[]): string[] => {
+  const result: string[] = [];
+  for (const str of arr) {
+    if (JSON.stringify([str]).length <= CELL_CHAR_LIMIT) {
+      result.push(str);
+    } else {
+      for (let i = 0; i < str.length; i += STRING_CHUNK_SIZE) {
+        result.push(str.slice(i, i + STRING_CHUNK_SIZE));
+      }
+    }
+  }
+  return result;
+};
+
+const serializeMatchHistoryEntries = (
+  entries: MatchHistoryEntry[],
+): SerializedRow[] => {
+  const rows: SerializedRow[] = [];
+
+  for (const entry of entries) {
+    const arrays: Record<string, string[]> = {};
+    for (const key of FINGERPRINT_ARRAY_KEYS) {
+      arrays[key] = chunkOversizedStrings(
+        (entry[key] as string[] | undefined) || [],
+      );
+    }
+
+    const firstRow = buildRow(entry.actionType || "move", arrays, entry);
+
+    if (!needsSplitting(firstRow)) {
+      rows.push(firstRow);
+      continue;
+    }
+
+    const remaining: Record<string, string[]> = {};
+    const current: Record<string, string[]> = {};
+    for (const key of FINGERPRINT_ARRAY_KEYS) {
+      remaining[key] = [...arrays[key]];
+      current[key] = [];
+    }
+
+    let isFirstChunk = true;
+    while (FINGERPRINT_ARRAY_KEYS.some((key) => remaining[key].length > 0)) {
+      for (const key of FINGERPRINT_ARRAY_KEYS) {
+        current[key] = [];
+      }
+
+      for (const key of FINGERPRINT_ARRAY_KEYS) {
+        while (remaining[key].length > 0) {
+          const candidate = [...current[key], remaining[key][0]];
+          if (
+            JSON.stringify(candidate).length > CELL_CHAR_LIMIT &&
+            current[key].length > 0
+          ) {
+            break;
+          }
+          current[key].push(remaining[key].shift()!);
+        }
+      }
+
+      const actionType = isFirstChunk
+        ? entry.actionType || "move"
+        : "continuation";
+      rows.push(buildRow(actionType, current, entry));
+      isFirstChunk = false;
+    }
+  }
+
+  return rows;
+};
 
 const createMatchHistoryWorkbook = (entries: MatchHistoryEntry[]) => {
   const workbook = XLSX.utils.book_new();
@@ -301,24 +421,62 @@ export const readMatchHistory = async (
 
     const rows = XLSX.utils.sheet_to_json<any>(worksheet, { defval: "" });
 
-    return rows.map((row: any) => ({
-      actionType: (row.ActionType || "move") as MatchHistoryEntry["actionType"],
-      cblFingerprints: JSON.parse(row.CblFingerprints || "[]"),
-      insurerFingerprints: JSON.parse(row.InsurerFingerprints || "[]"),
-      targetCblFingerprints: JSON.parse(row.TargetCblFingerprints || "[]"),
-      targetInsurerFingerprints: JSON.parse(
-        row.TargetInsurerFingerprints || "[]",
-      ),
-      orphanedCblFingerprints: JSON.parse(row.OrphanedCblFingerprints || "[]"),
-      orphanedInsurerFingerprints: JSON.parse(
-        row.OrphanedInsurerFingerprints || "[]",
-      ),
-      cblRemarks: JSON.parse(row.CblRemarks || "[]"),
-      insurerRemarks: JSON.parse(row.InsurerRemarks || "[]"),
-      fromBucket: row.FromBucket as BucketKey,
-      targetBucket: row.TargetBucket as BucketKey,
-      timestamp: row.Timestamp,
-    }));
+    const entries: MatchHistoryEntry[] = [];
+    let current: MatchHistoryEntry | null = null;
+
+    for (const row of rows) {
+      if (row.ActionType === "continuation" && current) {
+        current.cblFingerprints.push(
+          ...JSON.parse(row.CblFingerprints || "[]"),
+        );
+        current.insurerFingerprints.push(
+          ...JSON.parse(row.InsurerFingerprints || "[]"),
+        );
+        current.targetCblFingerprints!.push(
+          ...JSON.parse(row.TargetCblFingerprints || "[]"),
+        );
+        current.targetInsurerFingerprints!.push(
+          ...JSON.parse(row.TargetInsurerFingerprints || "[]"),
+        );
+        current.orphanedCblFingerprints!.push(
+          ...JSON.parse(row.OrphanedCblFingerprints || "[]"),
+        );
+        current.orphanedInsurerFingerprints!.push(
+          ...JSON.parse(row.OrphanedInsurerFingerprints || "[]"),
+        );
+        current.cblRemarks!.push(...JSON.parse(row.CblRemarks || "[]"));
+        current.insurerRemarks!.push(...JSON.parse(row.InsurerRemarks || "[]"));
+        continue;
+      }
+
+      if (current) entries.push(current);
+
+      current = {
+        actionType: (row.ActionType ||
+          "move") as MatchHistoryEntry["actionType"],
+        cblFingerprints: JSON.parse(row.CblFingerprints || "[]"),
+        insurerFingerprints: JSON.parse(row.InsurerFingerprints || "[]"),
+        targetCblFingerprints: JSON.parse(row.TargetCblFingerprints || "[]"),
+        targetInsurerFingerprints: JSON.parse(
+          row.TargetInsurerFingerprints || "[]",
+        ),
+        orphanedCblFingerprints: JSON.parse(
+          row.OrphanedCblFingerprints || "[]",
+        ),
+        orphanedInsurerFingerprints: JSON.parse(
+          row.OrphanedInsurerFingerprints || "[]",
+        ),
+        cblRemarks: JSON.parse(row.CblRemarks || "[]"),
+        insurerRemarks: JSON.parse(row.InsurerRemarks || "[]"),
+        fromBucket: row.FromBucket as BucketKey,
+        targetBucket: row.TargetBucket as BucketKey,
+        timestamp: row.Timestamp,
+      };
+    }
+
+    if (current) entries.push(current);
+
+    return entries;
   } catch (error) {
     console.warn("[Match History] Could not read history.xlsx:", error);
     return [];

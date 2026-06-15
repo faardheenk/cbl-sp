@@ -30,6 +30,9 @@ export const createBlankRow = (template: any, nextMatchGroup: number) => {
       acc[key] = "";
       acc["match_condition"] = "manual match";
       acc["match_group"] = nextMatchGroup.toString();
+      if (template?.group_id) {
+        acc["group_id"] = template.group_id;
+      }
       return acc;
     },
     {} as Record<string, string>,

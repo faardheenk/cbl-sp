@@ -122,6 +122,134 @@ function removeRowsPreservingOneSidedSpacers(
   return { updatedRows, rowsToMove, rowIndices };
 }
 
+function collectRowGroupIds(rows: any[]): Set<string> {
+  return rows.reduce<Set<string>>((groupIds, row) => {
+    const groupId = getRowGroupId(row);
+    if (groupId) {
+      groupIds.add(groupId);
+    }
+    return groupIds;
+  }, new Set<string>());
+}
+
+function rebalanceMatchedGroups(
+  bucketRows: BucketRows,
+  affectedGroupIds: Set<string>,
+): BucketRows {
+  if (affectedGroupIds.size === 0) {
+    return bucketRows;
+  }
+
+  type GroupBlock = {
+    firstIndex: number;
+    cblRows: any[];
+    insurerRows: any[];
+    template?: any;
+  };
+
+  const groupBlocks = new Map<string, GroupBlock>();
+
+  const ensureBlock = (key: string, index: number): GroupBlock => {
+    const existing = groupBlocks.get(key);
+    if (existing) {
+      existing.firstIndex = Math.min(existing.firstIndex, index);
+      return existing;
+    }
+
+    const block: GroupBlock = {
+      firstIndex: index,
+      cblRows: [],
+      insurerRows: [],
+    };
+    groupBlocks.set(key, block);
+    return block;
+  };
+
+  const collectSideRows = (rows: any[], side: "cbl" | "insurer"): void => {
+    rows.forEach((row, index) => {
+      const groupId = getRowGroupId(row);
+      const isBlank = isBlankAmountRow(row);
+
+      if (!groupId) {
+        if (isBlank) {
+          return;
+        }
+
+        const ungroupedBlock = ensureBlock(`__ungrouped_${index}`, index);
+        if (!ungroupedBlock.template) {
+          ungroupedBlock.template = row;
+        }
+        if (side === "cbl") {
+          ungroupedBlock.cblRows.push(row);
+        } else {
+          ungroupedBlock.insurerRows.push(row);
+        }
+        return;
+      }
+
+      if (!affectedGroupIds.has(groupId)) {
+        return;
+      }
+
+      const block = ensureBlock(groupId, index);
+      if (!block.template) {
+        block.template = row;
+      }
+      if (isBlank) {
+        return;
+      }
+
+      if (side === "cbl") {
+        block.cblRows.push(row);
+      } else {
+        block.insurerRows.push(row);
+      }
+    });
+  };
+
+  collectSideRows(bucketRows.cbl, "cbl");
+  collectSideRows(bucketRows.insurer, "insurer");
+
+  if (groupBlocks.size === 0) {
+    return bucketRows;
+  }
+
+  const cbl: any[] = [];
+  const insurer: any[] = [];
+
+  Array.from(groupBlocks.values())
+    .sort((left, right) => left.firstIndex - right.firstIndex)
+    .forEach((block) => {
+      const groupLength = Math.max(
+        block.cblRows.length,
+        block.insurerRows.length,
+      );
+      if (groupLength === 0) {
+        return;
+      }
+
+      const template =
+        block.template ||
+        block.cblRows[0] ||
+        block.insurerRows[0] ||
+        {};
+      const cblRows = [...block.cblRows];
+      const insurerRows = [...block.insurerRows];
+
+      while (cblRows.length < groupLength) {
+        cblRows.push(createOneSidedSpacerRow(undefined, template));
+      }
+      while (insurerRows.length < groupLength) {
+        insurerRows.push(createOneSidedSpacerRow(undefined, template));
+      }
+
+      cbl.push(...cblRows);
+      insurer.push(...insurerRows);
+    });
+
+  return { cbl, insurer };
+}
+
 /** Prefer stable row id so duplicate policy/amount pairs still resolve to the clicked row */
 function findSideRowIndex(targetSide: any[], targetRow: any): number {
   const idx = targetRow?.idx;
@@ -314,6 +442,10 @@ function getRowsByFingerprints(
   const fingerprintSet = new Set((fingerprints || []).filter(Boolean));
   if (fingerprintSet.size === 0) return [];
   return rows.filter((row) => fingerprintSet.has(getFingerprint(row)));
+}
+
+function shouldRecordFingerprintHistory(bucketKey: BucketKey): boolean {
+  return bucketKey !== "partial" && bucketKey !== "no-match";
 }
 
 function removeRowsAndOppositeSpacers(
@@ -1092,7 +1224,11 @@ function Reconciliation() {
 
       // Helper to check if a row is blank
       const isBlankRow = (row: any): boolean => {
-        return !row.ProcessedAmount || row.ProcessedAmount === "";
+        return (
+          row.ProcessedAmount === undefined ||
+          row.ProcessedAmount === null ||
+          row.ProcessedAmount === ""
+        );
       };
 
       // Helper to check if a row is selected
@@ -1597,7 +1733,10 @@ function Reconciliation() {
           row.ProcessedAmount !== undefined && row.ProcessedAmount !== "",
       );
 
-      if (nonBlankCBL.length > 0 || nonBlankInsurer.length > 0) {
+      if (
+        shouldRecordFingerprintHistory(toSection) &&
+        (nonBlankCBL.length > 0 || nonBlankInsurer.length > 0)
+      ) {
         const cblFingerprintsWithRows = nonBlankCBL.filter((row) =>
           getCanonicalCblFingerprint(row),
         );
@@ -1616,48 +1755,11 @@ function Reconciliation() {
           insurerRemarks: insurerFingerprintsWithRows.map(
             (row) => row.Remarks || "",
           ),
-          orphanedCblFingerprints: orphanedCblRows
-            .filter((row) => getCanonicalCblFingerprint(row))
-            .map((row) => getCanonicalCblFingerprint(row)),
-          orphanedInsurerFingerprints: orphanedInsurerRows
-            .filter((row) => getCanonicalInsurerFingerprint(row))
-            .map((row) => getCanonicalInsurerFingerprint(row)),
           targetBucket: toSection,
           fromBucket: fromSection,
           timestamp: new Date().toISOString(),
         };
         addMatchHistoryEntry(historyEntry);
-      }
-
-      const orphanedCblFingerprintsWithRows = orphanedCblRows.filter((row) =>
-        getCanonicalCblFingerprint(row),
-      );
-      const orphanedInsurerFingerprintsWithRows = orphanedInsurerRows.filter(
-        (row) => getCanonicalInsurerFingerprint(row),
-      );
-
-      if (
-        orphanedCblFingerprintsWithRows.length > 0 ||
-        orphanedInsurerFingerprintsWithRows.length > 0
-      ) {
-        addMatchHistoryEntry({
-          actionType: "move",
-          cblFingerprints: orphanedCblFingerprintsWithRows.map((row) =>
-            getCanonicalCblFingerprint(row),
-          ),
-          insurerFingerprints: orphanedInsurerFingerprintsWithRows.map((row) =>
-            getCanonicalInsurerFingerprint(row),
-          ),
-          cblRemarks: orphanedCblFingerprintsWithRows.map(
-            (row) => row.Remarks || "",
-          ),
-          insurerRemarks: orphanedInsurerFingerprintsWithRows.map(
-            (row) => row.Remarks || "",
-          ),
-          targetBucket: "no-match",
-          fromBucket: fromSection,
-          timestamp: new Date().toISOString(),
-        });
       }
 
       // Handle special case: partial to matched buckets (uses manualMatching)
@@ -1875,23 +1977,18 @@ function Reconciliation() {
           (row) => !isBlankRow(row) || !blankRowsToRemoveInsurer.has(row.idx),
         );
 
-        // Step 5: Re-equalize with cleaned arrays (this will add blank rows for remaining groups - the "green" ones)
-        const nonBlankCBL = cleanedCBL.filter((row) => !isBlankRow(row));
-        const nonBlankInsurer = cleanedInsurer.filter(
-          (row) => !isBlankRow(row),
+        const sourceGroupIdsToRebalance = collectRowGroupIds([
+          ...cleanedCBL,
+          ...cleanedInsurer,
+        ]);
+        const rebalancedSource = rebalanceMatchedGroups(
+          { cbl: cleanedCBL, insurer: cleanedInsurer },
+          sourceGroupIdsToRebalance,
         );
-        const currentPartialMatchGroup = getNextMatchGroup(
-          nonBlankCBL,
-          nonBlankInsurer,
+        const equalizedSourceCBL = repairParallelMatchedInsurerIndices(
+          rebalancedSource.cbl,
         );
-
-        // Re-equalize - this will add blank rows only for remaining groups
-        const [equalizedSourceCBL, equalizedSourceInsurer] =
-          equalizeWorksheetLengths(
-            cleanedCBL,
-            cleanedInsurer,
-            currentPartialMatchGroup,
-          );
+        const equalizedSourceInsurer = rebalancedSource.insurer;
 
         const regeneratedPartialCBL = regenerateIdx(
           equalizedSourceCBL,
@@ -1970,12 +2067,22 @@ function Reconciliation() {
         triggerClearAllSelections();
         return;
       } else {
-        // Preserve existing spacer rows in matched buckets. Removing all blanks
-        // here destroys unrelated groups after moving a regrouped block.
+        // Recompute matched source groups as compact blocks so stale spacers
+        // from other groups do not leave the two sides visually shifted.
         let finalSourceCBL = updatedSourceCBL;
-        const finalSourceInsurer = updatedSourceInsurer;
+        let finalSourceInsurer = updatedSourceInsurer;
 
         if (isMatchedBucket(fromSection)) {
+          const sourceGroupIdsToRebalance = collectRowGroupIds([
+            ...finalSourceCBL,
+            ...finalSourceInsurer,
+          ]);
+          const rebalancedSource = rebalanceMatchedGroups(
+            { cbl: finalSourceCBL, insurer: finalSourceInsurer },
+            sourceGroupIdsToRebalance,
+          );
+          finalSourceCBL = rebalancedSource.cbl;
+          finalSourceInsurer = rebalancedSource.insurer;
           finalSourceCBL = repairParallelMatchedInsurerIndices(finalSourceCBL);
         }
 
@@ -2668,7 +2775,9 @@ function Reconciliation() {
       const target = getBucketRows(targetBucket);
 
       const isBlankRow = (row: any): boolean =>
-        !row.ProcessedAmount || row.ProcessedAmount === "";
+        row.ProcessedAmount === undefined ||
+        row.ProcessedAmount === null ||
+        row.ProcessedAmount === "";
 
       const hasCblSelection = selectedRowCBL.some(
         (r) => r.ProcessedAmount !== "",
@@ -3039,14 +3148,8 @@ function Reconciliation() {
       const historyTargetInsurerRows = targetInsData.filter((row) =>
         getCanonicalInsurerFingerprint(row),
       );
-      const historyOrphanedCblRows = orphanedCblRows.filter((row) =>
-        getCanonicalCblFingerprint(row),
-      );
-      const historyOrphanedInsurerRows = orphanedInsurerRows.filter((row) =>
-        getCanonicalInsurerFingerprint(row),
-      );
-
       if (
+        shouldRecordFingerprintHistory(targetBucket) &&
         historyTargetCblRows.length +
           historyTargetInsurerRows.length +
           historyCblRows.length +
@@ -3065,12 +3168,6 @@ function Reconciliation() {
             getCanonicalCblFingerprint(row),
           ),
           targetInsurerFingerprints: historyTargetInsurerRows.map((row) =>
-            getCanonicalInsurerFingerprint(row),
-          ),
-          orphanedCblFingerprints: historyOrphanedCblRows.map((row) =>
-            getCanonicalCblFingerprint(row),
-          ),
-          orphanedInsurerFingerprints: historyOrphanedInsurerRows.map((row) =>
             getCanonicalInsurerFingerprint(row),
           ),
           cblRemarks: historyCblRows.map((row) => row.Remarks || ""),

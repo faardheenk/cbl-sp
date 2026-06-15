@@ -87,10 +87,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
   return (
     <>
       <div style={{ display: "flex", gap: "8px" }}>
-        <Tooltip
-          content={undoTooltipContent}
-          relationship="label"
-        >
+        <Tooltip content={undoTooltipContent} relationship="label">
           <Button
             icon={<ArrowUndoRegular fontSize={20} />}
             size="small"
@@ -117,11 +114,11 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
 
             const mergedExactMatch = mergeData(
               exactMatchCBL,
-              exactMatchInsurer
+              exactMatchInsurer,
             );
             const mergedPartialMatch = mergeData(
               partialMatchCBL,
-              partialMatchInsurer
+              partialMatchInsurer,
             );
             const addPostfixNoMatchInsurer = addPostfix(noMatchInsurer);
             const dynamicBucketSheets = dynamicBuckets.reduce<
@@ -163,7 +160,11 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
 
               if (res.status === 200) {
                 // Save match history for cross-session persistence
-                console.log("[Match History] Entries to save:", matchHistoryEntries.length, matchHistoryEntries);
+                console.log(
+                  "[Match History] Entries to save:",
+                  matchHistoryEntries.length,
+                  matchHistoryEntries,
+                );
                 await saveMatchHistory(
                   sp,
                   matchHistoryEntries,
@@ -177,7 +178,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
                   <Toast className="bg-success text-white rounded-3">
                     <ToastTitle>Saved Successfully</ToastTitle>
                   </Toast>,
-                  { position: "top", intent: "success" }
+                  { position: "top", intent: "success" },
                 );
               } else {
                 dispatchToast(
@@ -187,7 +188,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
                       Cannot save changes because the excel file is open
                     </ToastBody>
                   </Toast>,
-                  { position: "top", intent: "error" }
+                  { position: "top", intent: "error" },
                 );
               }
             } catch (error) {
@@ -199,7 +200,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
                     An error occurred while saving
                   </ToastBody>
                 </Toast>,
-                { position: "top", intent: "error" }
+                { position: "top", intent: "error" },
               );
             } finally {
               setIsSaving(false);
