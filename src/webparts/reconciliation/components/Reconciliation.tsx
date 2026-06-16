@@ -1,7 +1,15 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useSpContext } from "../../../SpContext";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { Button, useId, Toaster } from "@fluentui/react-components";
+import {
+  Button,
+  useId,
+  Toaster,
+  useToastController,
+  Toast,
+  ToastTitle,
+  ToastBody,
+} from "@fluentui/react-components";
 import { Dropdown } from "antd";
 import type { MenuProps } from "antd";
 import { fetchFile } from "../../../utils/fetchFiles";
@@ -663,6 +671,92 @@ function applyRegroupMatchHistory(
     }, bucketState);
 }
 
+/**
+ * Assemble rows for a matched destination bucket, equalizing per source
+ * group_id so spacers land between sub-groups instead of at the end.
+ */
+function assembleMatchedDestinationRows(
+  cblRows: any[],
+  insurerRows: any[],
+  startMatchGroup: number,
+): { cbl: any[]; insurer: any[]; lastMatchGroup: number } {
+  const nonBlankCbl = cblRows.filter(
+    (row) => !isBlankAmountRow(row),
+  );
+  const nonBlankInsurer = insurerRows.filter(
+    (row) => !isBlankAmountRow(row),
+  );
+
+  type SubGroup = { cbl: any[]; insurer: any[] };
+  const subGroupOrder: string[] = [];
+  const subGroupMap = new Map<string, SubGroup>();
+
+  const ensureSubGroup = (key: string): SubGroup => {
+    const existing = subGroupMap.get(key);
+    if (existing) return existing;
+    const group: SubGroup = { cbl: [], insurer: [] };
+    subGroupMap.set(key, group);
+    subGroupOrder.push(key);
+    return group;
+  };
+
+  nonBlankCbl.forEach((row) => {
+    const key = getRowGroupId(row) || "__ungrouped";
+    ensureSubGroup(key).cbl.push(row);
+  });
+  nonBlankInsurer.forEach((row) => {
+    const key = getRowGroupId(row) || "__ungrouped";
+    ensureSubGroup(key).insurer.push(row);
+  });
+
+  const assembledCbl: any[] = [];
+  const assembledInsurer: any[] = [];
+  let matchGroup = startMatchGroup;
+
+  if (subGroupOrder.length > 1) {
+    subGroupOrder.forEach((key) => {
+      const sub = subGroupMap.get(key)!;
+      if (sub.cbl.length === 0 && sub.insurer.length === 0) return;
+
+      const groupCbl = addGroupAndCondition(sub.cbl, matchGroup);
+      const groupInsurer = addGroupAndCondition(sub.insurer, matchGroup);
+
+      if (groupCbl.length !== groupInsurer.length) {
+        const [eqCbl, eqInsurer] = equalizeWorksheetLengths(
+          groupCbl,
+          groupInsurer,
+          matchGroup,
+        );
+        assembledCbl.push(...eqCbl);
+        assembledInsurer.push(...eqInsurer);
+      } else {
+        assembledCbl.push(...groupCbl);
+        assembledInsurer.push(...groupInsurer);
+      }
+
+      matchGroup = matchGroup % 2 === 0 ? 1 : 2;
+    });
+  } else {
+    const allCbl = addGroupAndCondition(nonBlankCbl, matchGroup);
+    const allInsurer = addGroupAndCondition(nonBlankInsurer, matchGroup);
+
+    if (allCbl.length !== allInsurer.length) {
+      const [eqCbl, eqInsurer] = equalizeWorksheetLengths(
+        allCbl,
+        allInsurer,
+        matchGroup,
+      );
+      assembledCbl.push(...eqCbl);
+      assembledInsurer.push(...eqInsurer);
+    } else {
+      assembledCbl.push(...allCbl);
+      assembledInsurer.push(...allInsurer);
+    }
+  }
+
+  return { cbl: assembledCbl, insurer: assembledInsurer, lastMatchGroup: matchGroup };
+}
+
 function Reconciliation() {
   const { context, sp } = useSpContext();
   const [isLoading, setIsLoading] = useState(true);
@@ -718,6 +812,9 @@ function Reconciliation() {
   } | null>(null);
   const [remarksMode, setRemarksMode] = useState<"move" | "standalone">("move");
   const [currentRemarks, setCurrentRemarks] = useState("");
+
+  const toasterId = useId("toaster");
+  const { dispatchToast } = useToastController(toasterId);
 
   const urlParams = new URLSearchParams(window.location.search);
   const insuranceName = urlParams.get("Insurance");
@@ -810,6 +907,27 @@ function Reconciliation() {
       setClearAllSelections(false);
     }, 100);
   }, [setClearAllSelections]);
+
+  const selectionSpansMultipleBuckets = useCallback((): boolean => {
+    const allSelected = [...selectedRowCBL, ...selectedRowInsurer];
+    if (allSelected.length === 0) return false;
+
+    const matchedBuckets = new Set<BucketKey>();
+    for (const bucketKey of getAllBucketKeys()) {
+      const bucketRows = getBucketRows(bucketKey);
+      const hasCbl = bucketRows.cbl.some((row) =>
+        selectedRowCBL.some((selected) => selected.idx === row.idx),
+      );
+      const hasInsurer = bucketRows.insurer.some((row) =>
+        selectedRowInsurer.some((selected) => selected.idx === row.idx),
+      );
+      if (hasCbl || hasInsurer) {
+        matchedBuckets.add(bucketKey);
+        if (matchedBuckets.size > 1) return true;
+      }
+    }
+    return false;
+  }, [selectedRowCBL, selectedRowInsurer, getAllBucketKeys, getBucketRows]);
 
   // Handle undo actions
   const handleUndoActions = useCallback(
@@ -1192,6 +1310,30 @@ function Reconciliation() {
       remarks?: string,
     ) => {
       if (selectedRowCBL.length === 0 && selectedRowInsurer.length === 0) {
+        return;
+      }
+
+      if (selectionSpansMultipleBuckets()) {
+        dispatchToast(
+          <Toast
+            style={{
+              backgroundColor: "#fff3cd",
+              color: "#856404",
+              borderRadius: "8px",
+              border: "1px solid #ffc107",
+              boxShadow: "0 8px 24px rgba(15, 23, 42, 0.18)",
+            }}
+          >
+            <ToastTitle style={{ color: "#856404" }}>
+              Cross-bucket selection
+            </ToastTitle>
+            <ToastBody style={{ color: "#856404" }}>
+              Selected rows span multiple buckets. Please select rows from one
+              bucket at a time.
+            </ToastBody>
+          </Toast>,
+          { position: "top", intent: "warning" },
+        );
         return;
       }
 
@@ -2026,30 +2168,20 @@ function Reconciliation() {
           ? exactMatchInsurerRows.map((row) => ({ ...row, Remarks: remarks }))
           : exactMatchInsurerRows;
 
-        const exactMatchRowsWithGroupCBL = addGroupAndCondition(
+        const assembled = assembleMatchedDestinationRows(
           remarkedCBLRows,
-          nextMatchGroup,
-        );
-        const exactMatchRowsWithGroupInsurer = addGroupAndCondition(
           remarkedInsurerRows,
           nextMatchGroup,
         );
 
-        const newMatchedBucketCBL = [
+        let equalizedDestinationCBL = repairParallelMatchedInsurerIndices([
           ...destination.cbl,
-          ...exactMatchRowsWithGroupCBL,
-        ];
-        const newMatchedBucketInsurer = [
+          ...assembled.cbl,
+        ]);
+        const equalizedDestinationInsurer = [
           ...destination.insurer,
-          ...exactMatchRowsWithGroupInsurer,
+          ...assembled.insurer,
         ];
-
-        const [equalizedDestinationCBL, equalizedDestinationInsurer] =
-          equalizeWorksheetLengths(
-            newMatchedBucketCBL,
-            newMatchedBucketInsurer,
-            nextMatchGroup,
-          );
 
         setBucketRows(
           toSection,
@@ -2106,7 +2238,7 @@ function Reconciliation() {
         ? destination.insurer
         : destination.insurer.filter((row) => !isBlankRow(row));
 
-      const nextMatchGroup = getNextMatchGroup(
+      let nextMatchGroup = getNextMatchGroup(
         destinationCBLBase,
         destinationInsurerBase,
       );
@@ -2118,40 +2250,54 @@ function Reconciliation() {
         ? rowsToMoveInsurer
         : rowsToMoveInsurer.filter((row) => !isBlankRow(row));
 
-      const destinationCblRowsToAdd =
-        toSection === "no-match"
-          ? cleanRowsForNoMatch([...cblRowsToAdd, ...orphanedCblRows])
-          : addGroupAndCondition(cblRowsToAdd, nextMatchGroup);
-      const destinationInsurerRowsToAdd =
-        toSection === "no-match"
-          ? cleanRowsForNoMatch([...insurerRowsToAdd, ...orphanedInsurerRows])
-          : addGroupAndCondition(insurerRowsToAdd, nextMatchGroup);
+      let newDestinationCBL: any[];
+      let newDestinationInsurer: any[];
 
-      // Add new rows to cleaned destination
-      // Note: We don't re-equalize at destination since we're moving an already-equalized group
-      let newDestinationCBL = [
-        ...destinationCBLBase,
-        ...destinationCblRowsToAdd,
-      ];
-      let newDestinationInsurer = [
-        ...destinationInsurerBase,
-        ...destinationInsurerRowsToAdd,
-      ];
-
-      if (
-        isMatchedBucket(toSection) &&
-        newDestinationCBL.length !== newDestinationInsurer.length
-      ) {
-        [newDestinationCBL, newDestinationInsurer] = equalizeWorksheetLengths(
-          newDestinationCBL,
-          newDestinationInsurer,
+      if (toSection === "no-match") {
+        newDestinationCBL = [
+          ...destinationCBLBase,
+          ...cleanRowsForNoMatch([...cblRowsToAdd, ...orphanedCblRows]),
+        ];
+        newDestinationInsurer = [
+          ...destinationInsurerBase,
+          ...cleanRowsForNoMatch([
+            ...insurerRowsToAdd,
+            ...orphanedInsurerRows,
+          ]),
+        ];
+      } else if (isMatchedBucket(toSection)) {
+        const assembled = assembleMatchedDestinationRows(
+          cblRowsToAdd,
+          insurerRowsToAdd,
           nextMatchGroup,
         );
-      }
 
-      if (isMatchedBucket(toSection)) {
-        newDestinationCBL =
-          repairParallelMatchedInsurerIndices(newDestinationCBL);
+        newDestinationCBL = repairParallelMatchedInsurerIndices([
+          ...destinationCBLBase,
+          ...assembled.cbl,
+        ]);
+        newDestinationInsurer = [
+          ...destinationInsurerBase,
+          ...assembled.insurer,
+        ];
+      } else {
+        const destinationCblRowsToAdd = addGroupAndCondition(
+          cblRowsToAdd,
+          nextMatchGroup,
+        );
+        const destinationInsurerRowsToAdd = addGroupAndCondition(
+          insurerRowsToAdd,
+          nextMatchGroup,
+        );
+
+        newDestinationCBL = [
+          ...destinationCBLBase,
+          ...destinationCblRowsToAdd,
+        ];
+        newDestinationInsurer = [
+          ...destinationInsurerBase,
+          ...destinationInsurerRowsToAdd,
+        ];
       }
 
       // Regenerate destination indices
@@ -2217,6 +2363,8 @@ function Reconciliation() {
       setMatrix,
       setSelectedRowCBL,
       setSelectedRowInsurer,
+      selectionSpansMultipleBuckets,
+      dispatchToast,
     ],
   );
 
@@ -2762,6 +2910,30 @@ function Reconciliation() {
       if (selectedRowCBL.length === 0 && selectedRowInsurer.length === 0)
         return;
 
+      if (selectionSpansMultipleBuckets()) {
+        dispatchToast(
+          <Toast
+            style={{
+              backgroundColor: "#fff3cd",
+              color: "#856404",
+              borderRadius: "8px",
+              border: "1px solid #ffc107",
+              boxShadow: "0 8px 24px rgba(15, 23, 42, 0.18)",
+            }}
+          >
+            <ToastTitle style={{ color: "#856404" }}>
+              Cross-bucket selection
+            </ToastTitle>
+            <ToastBody style={{ color: "#856404" }}>
+              Selected rows span multiple buckets. Please select rows from one
+              bucket at a time.
+            </ToastBody>
+          </Toast>,
+          { position: "top", intent: "warning" },
+        );
+        return;
+      }
+
       const targetBucket = regroupTarget.bucket;
       const targetRow = regroupTarget.row;
 
@@ -3199,6 +3371,8 @@ function Reconciliation() {
       setSelectedRowCBL,
       setSelectedRowInsurer,
       triggerClearAllSelections,
+      selectionSpansMultipleBuckets,
+      dispatchToast,
     ],
   );
 
@@ -3555,8 +3729,6 @@ function Reconciliation() {
       triggerClearAllSelections();
     }
   };
-
-  const toasterId = useId("toaster");
 
   return (
     <>
