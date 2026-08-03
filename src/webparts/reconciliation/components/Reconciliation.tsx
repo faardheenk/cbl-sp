@@ -2016,12 +2016,12 @@ function Reconciliation() {
           .filter(Boolean);
 
         const {
-          updatedRowsCBL,
-          updatedRowsInsurer,
+          updatedRowsCBL: rawUpdatedRowsCBL,
+          updatedRowsInsurer: rawUpdatedRowsInsurer,
           exactMatchCBLRows,
           exactMatchInsurerRows,
-          updatedNoMatchInsurer,
-          updatedNoMatchCBL,
+          updatedNoMatchInsurer: rawUpdatedNoMatchInsurer,
+          updatedNoMatchCBL: rawUpdatedNoMatchCBL,
         } = manualMatching(
           partialMatchCBL,
           partialMatchInsurer,
@@ -2034,6 +2034,30 @@ function Reconciliation() {
           Array.from(allCBLRowsInSelectedGroups),
           Array.from(allInsurerRowsInSelectedGroups),
         );
+
+        // manualMatching uses a global isBalanced flag that can miss orphans
+        // when deselections span multiple groups. Apply the already-computed
+        // orphan detection results from the generic pass above.
+        const orphanedInsIds = new Set(orphanedInsurerRows.map((r) => r.idx));
+        const orphanedCblIds = new Set(orphanedCblRows.map((r) => r.idx));
+
+        const updatedRowsCBL = rawUpdatedRowsCBL.filter(
+          (row) => !orphanedCblIds.has(row.idx),
+        );
+        const updatedRowsInsurer = rawUpdatedRowsInsurer.filter(
+          (row) => !orphanedInsIds.has(row.idx),
+        );
+        const updatedNoMatchInsurer = [
+          ...rawUpdatedNoMatchInsurer,
+          ...cleanRowsForNoMatch(orphanedInsurerRows),
+        ];
+        const updatedNoMatchCBL =
+          orphanedCblRows.length > 0
+            ? [
+                ...(rawUpdatedNoMatchCBL || noMatchCBL || []),
+                ...cleanRowsForNoMatch(orphanedCblRows),
+              ]
+            : rawUpdatedNoMatchCBL;
 
         // Remove blank rows that belonged to the moved groups, then re-equalize for remaining groups
         // Key insight: equalizeWorksheetLengths adds blank rows at the END of shorter arrays
