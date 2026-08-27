@@ -14,6 +14,7 @@ export interface Task {
   serverRelativeUrl?: string;
   path?: string;
   hasSubFolders?: boolean;
+  matrix?: boolean;
 }
 
 interface TaskContextType {

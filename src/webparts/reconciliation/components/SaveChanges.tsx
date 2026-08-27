@@ -28,6 +28,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
   const { context, sp } = useSpContext();
   const { changes, setChanges } = useChanges();
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [hasSaved, setHasSaved] = useState<boolean>(false);
   const [isUndoModalOpen, setIsUndoModalOpen] = useState<boolean>(false);
   const {
     exactMatchCBL,
@@ -56,14 +57,16 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
   const urlParams = new URLSearchParams(window.location.search);
   const insuranceName = urlParams.get("Insurance");
   const date = urlParams.get("Date");
-  const isUndoDisabled = isSaving || actionHistory.length === 0;
+  const isUndoDisabled = isSaving || hasSaved || actionHistory.length === 0;
   const undoTooltipContent = isSaving
     ? "Cannot undo while saving"
-    : actionHistory.length === 0
-      ? "No actions to undo"
-      : `${actionHistory.length} action${
-          actionHistory.length !== 1 ? "s" : ""
-        } available to undo`;
+    : hasSaved
+      ? "Cannot undo after saving"
+      : actionHistory.length === 0
+        ? "No actions to undo"
+        : `${actionHistory.length} action${
+            actionHistory.length !== 1 ? "s" : ""
+          } available to undo`;
 
   const handleUndoClick = () => {
     if (isUndoDisabled) return;
@@ -173,6 +176,7 @@ function SaveChanges({ onUndo }: SaveChangesProps) {
                 );
                 setMatchHistoryEntries([]);
                 clearHistory();
+                setHasSaved(true);
 
                 dispatchToast(
                   <Toast className="bg-success text-white rounded-3">

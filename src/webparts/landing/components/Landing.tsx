@@ -73,6 +73,7 @@ const Landing = () => {
   const [rerunningFolderUrl, setRerunningFolderUrl] = useState<string | null>(
     null,
   );
+  const [settingMatrixUrl, setSettingMatrixUrl] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
     { name: "Reconciliation Library", path: "", serverRelativeUrl: "" },
   ]);
@@ -135,7 +136,25 @@ const Landing = () => {
             key: "date",
             render: (text: string, record: any) => {
               if (record.isFolder) return null;
-              return text;
+              return (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  {text}
+                  {record.matrix && (
+                    <Badge
+                      bg="info"
+                      style={{ padding: "0.3rem 0.5rem", fontSize: "0.7rem" }}
+                    >
+                      Matrix
+                    </Badge>
+                  )}
+                </span>
+              );
             },
           },
           {
@@ -190,6 +209,22 @@ const Landing = () => {
                       Re-run
                     </Button>
                   )}
+                  <Button
+                    appearance={row.matrix ? "primary" : "secondary"}
+                    size="medium"
+                    disabled={
+                      row.matrix ||
+                      settingMatrixUrl === row.serverRelativeUrl
+                    }
+                    icon={
+                      settingMatrixUrl === row.serverRelativeUrl ? (
+                        <Spinner size="tiny" />
+                      ) : undefined
+                    }
+                    onClick={() => void handleSetMatrix(row)}
+                  >
+                    {row.matrix ? "Matrix" : "Set Matrix"}
+                  </Button>
                 </div>
               );
             },
@@ -267,6 +302,7 @@ const Landing = () => {
                     .getFolderByServerRelativePath(folder.ServerRelativeUrl)
                     .listItemAllFields();
                   const status = folderProps.Status || "Pending";
+                  const isMatrix = folderProps.Matrix === true;
 
                   const folderNameParts = folder.Name.split("_");
                   const datePart = folderNameParts[0];
@@ -287,6 +323,7 @@ const Landing = () => {
                     serverRelativeUrl: folder.ServerRelativeUrl,
                     path: path ? `${path}/${folder.Name}` : folder.Name,
                     hasSubFolders,
+                    matrix: isMatrix,
                   };
                 } catch (error) {
                   console.error("Error getting folder properties:", error);
@@ -409,6 +446,68 @@ const Landing = () => {
         }
       }),
     );
+  };
+
+  const handleSetMatrix = async (row: Task) => {
+    if (!sp || !row.serverRelativeUrl) return;
+
+    try {
+      setSettingMatrixUrl(row.serverRelativeUrl);
+
+      // Unset matrix on all other folders in this insurance
+      const otherMatrixTasks = tasks.filter(
+        (t) => t.matrix && t.serverRelativeUrl !== row.serverRelativeUrl,
+      );
+      for (const task of otherMatrixTasks) {
+        if (task.serverRelativeUrl) {
+          const item = await sp.web
+            .getFolderByServerRelativePath(task.serverRelativeUrl)
+            .listItemAllFields();
+          await sp.web.lists
+            .getByTitle("Reconciliation Library")
+            .items.getById(item.ID)
+            .update({ Matrix: false });
+        }
+      }
+
+      // Set matrix on the selected folder
+      const item = await sp.web
+        .getFolderByServerRelativePath(row.serverRelativeUrl)
+        .listItemAllFields();
+      await sp.web.lists
+        .getByTitle("Reconciliation Library")
+        .items.getById(item.ID)
+        .update({ Matrix: true });
+
+      // Update local state
+      setTasks((prevTasks) =>
+        prevTasks.map((task) => ({
+          ...task,
+          matrix: task.serverRelativeUrl === row.serverRelativeUrl,
+        })),
+      );
+
+      dispatchToast(
+        <Toast>
+          <ToastTitle style={{ color: "#155724" }}>Matrix set</ToastTitle>
+          <ToastBody>
+            {row.name} has been set as the matrix folder.
+          </ToastBody>
+        </Toast>,
+        { intent: "success" },
+      );
+    } catch (error) {
+      console.error("Failed to set matrix:", error);
+      dispatchToast(
+        <Toast>
+          <ToastTitle style={{ color: "#842029" }}>Error</ToastTitle>
+          <ToastBody>Failed to set matrix on this folder.</ToastBody>
+        </Toast>,
+        { intent: "error" },
+      );
+    } finally {
+      setSettingMatrixUrl(null);
+    }
   };
 
   const handleRerunReconciliation = async (row: Task) => {
@@ -772,13 +871,6 @@ const Landing = () => {
             >
               Create New Bucket
             </Button> */}
-            <Button
-              appearance="primary"
-              onClick={loadMatrixHistory}
-              disabled={isMatrixLoading}
-            >
-              {isMatrixLoading ? <Spinner size="tiny" /> : "View Matrix"}
-            </Button>
           </div>
         )}
       </Card>
